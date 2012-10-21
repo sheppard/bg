@@ -9,7 +9,7 @@ Point.objects.all().delete()
 
 import random
 
-count = 40
+count = 20
 
 #types: b j g d
 
@@ -36,7 +36,7 @@ for x in range(0, count):
         if t not in types:
             types[t] = 0
         types[t] += 1
-        Point.objects.create(x=x, y=y, type=t, clear=False)
+        Point.objects.create(x=x, y=y, type=t, clear=None)
 
 for t, count in types.items():
     print '%s: %s' % (t, count)

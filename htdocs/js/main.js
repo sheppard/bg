@@ -2,12 +2,24 @@ require(["wq/lib/d3", "wq/store"], function(d3, ds) {
 ds.init('');
 localStorage.clear();
 
+var pcolors = ['#99f', '#f9f', '#9ff', '#f99', '#ff9', '#9f9'];
+var pcolor = pcolors[Math.floor(Math.random()*pcolors.length)];
+
+/*var player = {};
+ds.save({
+  'url': 'players',
+  'method': 'POST',
+  'color': pcolor
+}, undefined, function(p){
+    player.info = p;
+}); */
+
 var jumps = 1;
 var score = 0;
 
 var size = 32;
 var space = 2;
-var count = 40;
+var count = 20;
 var total = (size + space) * count;
 
 var curlist = {};
@@ -15,7 +27,7 @@ var svg = d3.select('body').append('svg').attr('width', total).attr('height', to
 
 function color(d) {
   if (d.clear)
-    return 'transparent';
+    return d.clear;
   else if (d.type == 'p')
     return '#333';
   else
@@ -57,28 +69,7 @@ function render2(plist) {
    var pts = svg.selectAll('g.point')
      .data(plist.list)
      .enter().append('g').attr('class', 'point')
-
-   pts.append('circle')
-     .attr('r', size * 0.4)
-     .attr('cx', size * 0.5)
-     .attr('cy', size * 0.5)
-     .attr('stroke', function(d) {
-        if (d.type == 'b')
-           return 'transparent';
-
-        return '#999';
-     })
-     .attr('fill', function(d) {
-         if (d.type == 'j')
-            return 'green';
-         if (d.type == 'g')
-            return 'gold';
-         if (d.type == 'd')
-            return '#eee';
-         if (d.type == 't')
-            return 'red';
-         return 'transparent';
-     })
+   
    pts.append('rect')
      .attr('width', size)
      .attr('height', size)
@@ -86,6 +77,34 @@ function render2(plist) {
      .attr('stroke', function(d) {
         if (d.clear) return 'transparent';
         return '#999'});       
+
+   pts.append('circle')
+     .attr('r', size * 0.4)
+     .attr('cx', size * 0.5)
+     .attr('cy', size * 0.5)
+     .attr('stroke', function(d) {
+        if (!d.clear)
+           return 'transparent';
+        if (d.type == 'b')
+           return 'transparent';
+
+        return '#999';
+     })
+     .attr('fill', function(d) {
+         if (!d.clear)
+            return 'transparent';
+         if (d.type == 'j')
+            return 'green';
+         if (d.type == 'g')
+            return 'gold';
+         if (d.type == 'd')
+            return '#eee';
+         if (d.type == 's')
+            return 'white';
+         if (d.type == 't')
+            return 'red';
+         return 'transparent';
+     })
    pts.attr('transform', function(d) {
         return 'translate(' + (d.x*(size+space)) + ',' + (d.y*(size+space)) + ')';
      });
@@ -100,7 +119,7 @@ function check(pt, ox, oy) {
    if (pt.y + oy >= count)
       return false;
    var index = ((pt.x+ox)*count)+(pt.y+oy);
-   return curlist.data[index].clear;
+   return curlist.data[index].clear == pcolor;
 }
 pts.on('mouseover', function() {
 //   d3.select(this).selectAll('rect').attr('fill', hcolor)
@@ -146,7 +165,7 @@ pts.on('click', function(d) {
        'x': d.x,
        'y': d.y,
        'type': d.type,
-       'clear': true
+       'clear': pcolor,
    }, undefined, update);
 });
 
