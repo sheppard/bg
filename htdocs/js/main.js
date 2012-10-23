@@ -19,7 +19,7 @@ var score = 0;
 
 var size = 32;
 var space = 2;
-var count = 20;
+var count = 41;
 var total = (size + space) * count;
 
 var curlist = {};
