@@ -16,6 +16,7 @@ ds.save({
 
 var jumps = 1;
 var score = 0;
+var version = 1;
 
 var size = 32;
 var space = 2;
@@ -41,13 +42,27 @@ function hcolor(d) {
 }
 update();
 function update() {
-   d3.json('/points.json', render2);
+   d3.json('/points.json?version__gte=' + version, render2);
 }
 
 var colors = [];
 function render2(plist) {
    curlist.data = plist.list;
-   if (colors.length == 0) {
+   curlist.data.forEach(function(d) {
+      if (d.version > version)
+         version=d.version;
+   });
+   var pts = svg.selectAll('g.point')
+     .data(plist.list, function(d){return d.x + '-' + d.y});
+   if (colors.length == 0)
+      pts = init(pts);
+   styles(pts);
+d3.select('#jumps').text(jumps);
+d3.select('#score').text(score);
+//d3.select('#version').text(version);
+}
+
+function init(pts) {
       curlist.data.forEach(function(d) {
     var num = Math.random();
     var col;
@@ -62,27 +77,38 @@ function render2(plist) {
       colors[d.id] = col;
 
       });
-   }
-   svg.selectAll('g.point')
-     .data([])
-     .exit().remove()
-   var pts = svg.selectAll('g.point')
-     .data(plist.list)
-     .enter().append('g').attr('class', 'point')
+
+   pts = pts.enter().append('g').attr('class', 'point')
    
    pts.append('rect')
      .attr('width', size)
-     .attr('height', size)
+     .attr('height', size);
+   pts.append('circle')
+     .attr('r', size * 0.4)
+     .attr('cx', size * 0.5)
+     .attr('cy', size * 0.5)
+   pts.attr('transform', function(d) {
+      return 'translate(' + (d.x*(size+space)) + ',' + (d.y*(size+space)) + ')';
+   });
+pts.on('mouseover', function() {
+//   d3.select(this).selectAll('rect').attr('fill', hcolor)
+});
+pts.on('mouseout', function() {
+//   d3.select(this).selectAll('rect').attr('fill', color);
+});
+   pts.on('click', click);
+   return pts;
+}
+
+function styles(pts) {
+   pts.select('rect')
      .attr('fill', color)
      .attr('stroke', function(d) {
         if (d.clear) return 'transparent';
         return '#999'});       
 
-   pts.append('circle')
-     .attr('r', size * 0.4)
-     .attr('cx', size * 0.5)
-     .attr('cy', size * 0.5)
-     .attr('stroke', function(d) {
+   pts.select('circle')
+      .attr('stroke', function(d) {
         if (!d.clear)
            return 'transparent';
         if (d.type == 'b')
@@ -105,9 +131,7 @@ function render2(plist) {
             return 'red';
          return 'transparent';
      })
-   pts.attr('transform', function(d) {
-        return 'translate(' + (d.x*(size+space)) + ',' + (d.y*(size+space)) + ')';
-     });
+}
 
 function check(pt, ox, oy) {
    if (pt.x + ox < 0)
@@ -121,16 +145,8 @@ function check(pt, ox, oy) {
    var index = ((pt.x+ox)*count)+(pt.y+oy);
    return curlist.data[index].clear == pcolor;
 }
-pts.on('mouseover', function() {
-//   d3.select(this).selectAll('rect').attr('fill', hcolor)
-});
-pts.on('mouseout', function() {
-//   d3.select(this).selectAll('rect').attr('fill', color);
-});
 
-d3.select('#jumps').text(jumps)
-d3.select('#score').text(score)
-pts.on('click', function(d) {
+function click(d) {
    if (d.type == 'p')
       return;
    var c1 = check(d, -1, 0)
@@ -156,7 +172,6 @@ pts.on('click', function(d) {
        if (d.type == 't')
           score += 10000;
        d.type = 'b';
-       d3.select('#score').text(score)
    }
 
    ds.save({
@@ -166,14 +181,8 @@ pts.on('click', function(d) {
        'y': d.y,
        'type': d.type,
        'clear': pcolor,
+       'version': version
    }, undefined, update);
-});
-
-}
-function render(plist) {
-   d3.selectAll('g.point')
-     .data(plist.list)
-     .attr('fill', color);
 }
 
 });

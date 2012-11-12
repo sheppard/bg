@@ -47,7 +47,7 @@ for x in range(0, count):
         if t not in types:
             types[t] = 0
         types[t] += 1
-        Point.objects.create(x=x, y=y, type=t, clear=None)
+        Point.objects.create(x=x, y=y, type=t, version=1, clear=None)
 
 for t, count in types.items():
     print '%s: %s' % (t, count)
