@@ -17,6 +17,9 @@ class Point(models.Model):
         self.version = v
 	cache.set('version', v)
 	super(Point, self).save(*args, **kwargs)
+
+    def __unicode__(self):
+        return "%s, %s: %s" % (self.x, self.y, self.type)
     
     class Meta:
         ordering = ('x','y')

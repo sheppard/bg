@@ -1,0 +1,15 @@
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'busgame',
+        'USER': 'sheppard',
+        'PASSWORD': '',
+        'HOST': '',
+        'PORT': '',
+    }
+}
+
+SECRET_KEY = Secret
+
+DEBUG = True
+TEMPLATE_DEBUG = DEBUG

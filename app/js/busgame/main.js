@@ -1,4 +1,4 @@
-require(["wq/lib/d3", "wq/store"], function(d3, ds) {
+require(["d3", "wq/store"], function(d3, ds) {
 ds.init('');
 localStorage.clear();
 

@@ -1,0 +1,47 @@
+{
+    "optimize": {
+        "appDir": ".",
+        "baseUrl": "js/lib",
+        "dir":     "../htdocs-build",
+        "skipDirOptimize": true,
+        "removeCombined": true,
+
+        "modules": [
+            {
+                "name": "busgame"
+            }
+        ],
+        "paths": {
+            "busgame": "../busgame",
+            "db": "empty:"
+        }
+    },
+    "setversion": {
+       "filename": "../version.txt",
+       "jsout": "js/busgame/version.js"
+    },
+    "collectjson": [
+        {
+            "paths": ["../templates"],
+            "type": "html",
+            "output": "js/busgame/templates.js",
+            "json": {
+                "indent": 4
+            },
+            "jsonp": "define"
+        }
+    ],
+    "appcache": {
+        "name": "busgame.appcache",
+        "css":  "css/busgame.css",
+        "cache": [
+            "js/lib/require.js"
+        ],
+        "network": [
+            "*",
+            "http://*",
+            "https://*"
+        ],
+        "fallback": [""]
+    }
+}
