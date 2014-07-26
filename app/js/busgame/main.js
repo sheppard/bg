@@ -46,14 +46,25 @@ svg.append('rect')
    .attr('width', swidth + 10)
    .attr('height', sheight + 10)
    .attr('fill', '#999');
-svg.append('defs')
-   .append('clipPath')
+var defs = svg.append('defs')
+defs.append('clipPath')
       .attr('id', 'clip')
    .append('rect')
       .attr('x', 0)
       .attr('y', 0)
       .attr('width', swidth)
       .attr('height', sheight);
+[0, 1, 2, 3].forEach(function(x) {
+    [0, 1, 2, 3].forEach(function(y) {
+        defs.append('clipPath')
+           .attr('id', 'tile-clip-' + x + '-' + y)
+           .append('rect')
+               .attr('x', x * size)
+               .attr('y', y * size)
+               .attr('width', size)
+               .attr('height', size);
+    });
+});
 svg = svg.append('g')
    .attr('transform', 'translate(5,5)')
    .attr('clip-path', 'url(#clip)');
@@ -133,7 +144,6 @@ function init(pts) {
        .attr('width', size * 4)
        .attr('height', size * 4)
        .attr('xlink:href', '/images/tile.png')
-       .attr('clip', 'rect(0 0 ' + size + ' ' + size + ')')
        .attr('image-rendering', 'optimizeSpeed');
 
 g.on('mouseover', function() {
@@ -161,8 +171,8 @@ function _tileXY(d) {
     var u = _getTile(d.x, d.y - 1).type == d.type;
     var d = _getTile(d.x, d.y + 1).type == d.type;
 
-    var tx = d + 3 * u - 2 * u * d;
-    var ty = r + 3 * l - 2 * r * l;
+    var tx = r + 3 * l - 2 * r * l;
+    var ty = d + 3 * u - 2 * u * d;
 
     return {
         'x': tx,
@@ -172,18 +182,13 @@ function _tileXY(d) {
 function _tileXForm(d) {
     var xy = _tileXY(d);
     return 'translate(' + [
-        xy.y * -size,
         xy.x * -size,
+        xy.y * -size,
     ].join(',') + ')';
 }
 function _tileClip(d) {
     var xy = _tileXY(d);
-    return 'rect(' + [
-        xy.x * size,
-        xy.y * size,
-        (xy.x + 1) * size,
-        (xy.y + 1) * size
-    ].join(' ') + ')';
+    return "url(#tile-clip-" + xy.x + '-' + xy.y + ")";
 }
 
 function _transform(uselast) {
@@ -197,7 +202,7 @@ function styles(pts) {
    pts.attr('transform', _transform(true));
    pts.transition().duration(1000).attr('transform', _transform());
    pts.select('image')
-     .attr('clip', _tileClip)
+     .attr('clip-path', _tileClip)
      .attr('transform', _tileXForm);
    pts.select('rect')
      .attr('fill', color)
