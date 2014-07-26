@@ -18,13 +18,50 @@ var jumps = 1;
 var score = 0;
 var version = 1;
 
-var size = 32;
-var space = 2;
-var count = 41;
-var total = (size + space) * count;
+var size = 64;
+var space = 0;
+var count = 20;//41;
+var o = {'x': 0, 'y': 0, 'w': 8, 'h': 5};
+var last = {'x': 0, 'y': 0, 'w': 8, 'h': 5};
+var swidth = (size + space) * o.w;
+var sheight = (size + space) * o.h;
+
+setInterval(function() {
+    o.x += Math.round(Math.random() * 5 - 2.5);
+    o.y += Math.round(Math.random() * 5 - 2.5);
+    if (o.x < -2) o.x = -2;
+    if (o.y < -2) o.y = -2;
+    if (o.x > count + 2) o.x = count;
+    if (o.y > count + 2) o.y = count;
+    render2({'list': curlist.data});
+    last.x = o.x;
+    last.y = o.y;
+}, 2000);
 
 var curlist = {};
-var svg = d3.select('body').append('svg').attr('width', total).attr('height', total);
+var svg = d3.select('body').append('svg')
+   .attr('width', swidth + 10)
+   .attr('height', sheight + 10);
+svg.append('rect')
+   .attr('width', swidth + 10)
+   .attr('height', sheight + 10)
+   .attr('fill', '#999');
+svg.append('defs')
+   .append('clipPath')
+      .attr('id', 'clip')
+   .append('rect')
+      .attr('x', 0)
+      .attr('y', 0)
+      .attr('width', swidth)
+      .attr('height', sheight);
+svg = svg.append('g')
+   .attr('transform', 'translate(5,5)')
+   .attr('clip-path', 'url(#clip)');
+svg.append('rect')
+   .attr('width', swidth)
+   .attr('height', sheight)
+   .attr('fill', '#fff');
+
 
 function color(d) {
   if (d.clear)
@@ -48,15 +85,19 @@ function update() {
 var colors = [];
 function render2(plist) {
    curlist.data = plist.list;
+   var current = [];
    curlist.data.forEach(function(d) {
       if (d.version > version)
          version=d.version;
+      if (d.x >= o.x - 1 && d.x < o.x + o.w + 1 && d.y >= o.y - 1 && d.y < o.y + o.h + 1)
+         current.push(d);
    });
+  
    var pts = svg.selectAll('g.point')
-     .data(plist.list, function(d){return d.x + '-' + d.y});
-   if (colors.length == 0)
-      pts = init(pts);
+     .data(current, function(d){return d.x + '-' + d.y});
+   init(pts.enter());
    styles(pts);
+   pts.exit().transition().duration(1000).attr('transform', _transform()).remove();
 d3.select('#jumps').text(jumps);
 d3.select('#score').text(score);
 //d3.select('#version').text(version);
@@ -78,29 +119,86 @@ function init(pts) {
 
       });
 
-   pts = pts.enter().append('g').attr('class', 'point')
+   var g = pts.append('g').attr('class', 'point')
+
    
-   pts.append('rect')
+/*   pts.append('rect')
      .attr('width', size)
      .attr('height', size);
    pts.append('circle')
      .attr('r', size * 0.4)
      .attr('cx', size * 0.5)
-     .attr('cy', size * 0.5)
-   pts.attr('transform', function(d) {
-      return 'translate(' + (d.x*(size+space)) + ',' + (d.y*(size+space)) + ')';
-   });
-pts.on('mouseover', function() {
+     .attr('cy', size * 0.5) */
+   g.append('image')
+       .attr('width', size * 4)
+       .attr('height', size * 4)
+       .attr('xlink:href', '/images/tile.png')
+       .attr('clip', 'rect(0 0 ' + size + ' ' + size + ')')
+       .attr('image-rendering', 'optimizeSpeed');
+
+g.on('mouseover', function() {
 //   d3.select(this).selectAll('rect').attr('fill', hcolor)
 });
-pts.on('mouseout', function() {
+g.on('mouseout', function() {
 //   d3.select(this).selectAll('rect').attr('fill', color);
 });
-   pts.on('click', click);
+   g.on('click', click);
    return pts;
 }
 
+function _getTile(x, y) {
+   if (x < 0 || x >= count || y < 0 || y >= count)
+      return {}
+    var index = x * count + y;
+    var result = curlist.data[index] || {};
+    return result;
+}
+function _tileXY(d) {
+//    if (d.type != 'p')
+//        return {'x': -1, 'y': -1};
+    var l = _getTile(d.x - 1, d.y).type == d.type;
+    var r = _getTile(d.x + 1, d.y).type == d.type;
+    var u = _getTile(d.x, d.y - 1).type == d.type;
+    var d = _getTile(d.x, d.y + 1).type == d.type;
+
+    var tx = d + 3 * u - 2 * u * d;
+    var ty = r + 3 * l - 2 * r * l;
+
+    return {
+        'x': tx,
+        'y': ty
+    }
+}
+function _tileXForm(d) {
+    var xy = _tileXY(d);
+    return 'translate(' + [
+        xy.y * -size,
+        xy.x * -size,
+    ].join(',') + ')';
+}
+function _tileClip(d) {
+    var xy = _tileXY(d);
+    return 'rect(' + [
+        xy.x * size,
+        xy.y * size,
+        (xy.x + 1) * size,
+        (xy.y + 1) * size
+    ].join(' ') + ')';
+}
+
+function _transform(uselast) {
+  var offset = uselast ? last : o;
+  return function(d) {
+    return 'translate(' + ((-offset.x + d.x)*(size+space)) + ',' + ((-offset.y + d.y)*(size+space)) + ')';
+  }
+}
+
 function styles(pts) {
+   pts.attr('transform', _transform(true));
+   pts.transition().duration(1000).attr('transform', _transform());
+   pts.select('image')
+     .attr('clip', _tileClip)
+     .attr('transform', _tileXForm);
    pts.select('rect')
      .attr('fill', color)
      .attr('stroke', function(d) {
