@@ -16,15 +16,17 @@ ds.save({
 
 var jumps = 1;
 var score = 0;
-var version = 1;
+//var version = 1;
 
 var size = 64;
 var space = 0;
-var count = 20;//41;
-var o = {'x': 0, 'y': 0, 'w': 8, 'h': 5};
-var last = {'x': 0, 'y': 0, 'w': 8, 'h': 5};
+var count = 128; // should load from server
+var o = {'x': 10, 'y': 10, 'w': 8, 'h': 6};
+var last = {'x': o.x, 'y': o.y, 'w': o.w, 'h': o.h};
+var scope = {'x': o.x - 4, 'y': o.y - 4, 'w': 16, 'h': 16};
 var swidth = (size + space) * o.w;
 var sheight = (size + space) * o.h;
+var grid = {}
 
 setInterval(function() {
     o.x += Math.round(Math.random() * 5 - 2.5);
@@ -33,12 +35,13 @@ setInterval(function() {
     if (o.y < -2) o.y = -2;
     if (o.x > count + 2) o.x = count;
     if (o.y > count + 2) o.y = count;
-    render2({'list': curlist.data});
+    scope.x = o.x - 4;
+    scope.y = o.y - 4;
+    render2(true);
     last.x = o.x;
     last.y = o.y;
-}, 2000);
+}, 5000);
 
-var curlist = {};
 var svg = d3.select('body').append('svg')
    .attr('width', swidth + 10)
    .attr('height', sheight + 10);
@@ -73,6 +76,7 @@ svg.append('rect')
    .attr('height', sheight)
    .attr('fill', '#fff');
 
+render2(true);
 
 function color(d) {
   if (d.clear)
@@ -88,48 +92,57 @@ function hcolor(d) {
   else
     return '#eef';
 }
-update();
+setInterval(update, 2000);
 function update() {
-   d3.json('/points.json?version__gte=' + version, render2);
+    var minx = scope.x,
+        maxx = scope.x + scope.w,
+        miny = scope.y,
+        maxy = scope.y + scope.h;
+    var tiles = _getTiles(minx, miny, maxx, maxy);
+    var last_version = 100000000;
+    tiles.forEach(function(d) {
+        if (d.last_version < last_version)
+            last_version = d.last_version;
+    });
+    var url = '/points.json?version__gt=' + last_version;
+    url += '&x__gte=' + minx;
+    url += '&x__lte=' + maxx;
+    url += '&y__gte=' + miny;
+    url += '&y__lte=' + maxy;
+    d3.json(url, function(data) {
+        data.list.forEach(function(d) {
+            d.last_version = data.last_version;
+            if (!grid[d.x])
+                grid[d.x] = {};
+            grid[d.x][d.y] = d;
+        });
+        render2();
+    });
 }
 
 var colors = [];
-function render2(plist) {
-   curlist.data = plist.list;
-   var current = [];
-   curlist.data.forEach(function(d) {
-      if (d.version > version)
-         version=d.version;
-      if (d.x >= o.x - 1 && d.x < o.x + o.w + 1 && d.y >= o.y - 1 && d.y < o.y + o.h + 1)
-         current.push(d);
-   });
-  
-   var pts = svg.selectAll('g.point')
-     .data(current, function(d){return d.x + '-' + d.y});
-   init(pts.enter());
-   styles(pts);
-   pts.exit().transition().duration(1000).attr('transform', _transform()).remove();
-d3.select('#jumps').text(jumps);
-d3.select('#score').text(score);
-//d3.select('#version').text(version);
+function render2(doMove) {
+    var minx = o.x - 1,
+        maxx = o.x + o.w + 1,
+        miny = o.y - 1,
+        maxy = o.y + o.h + 1,
+        current = _getTiles(minx, miny, maxx, maxy);
+
+    var pts = svg.selectAll('g.point')
+        .data(current, function(d){return d.x + ',' + d.y});
+    init(pts.enter());
+    styles(pts);
+    if (doMove) {
+        move(pts);
+        pts.exit().transition().duration(1000)
+            .attr('transform', _transform()).remove();
+    }
+    // d3.select('#jumps').text(jumps);
+    // d3.select('#score').text(score);
+    //d3.select('#version').text(version);
 }
 
 function init(pts) {
-      curlist.data.forEach(function(d) {
-    var num = Math.random();
-    var col;
-    if (num > 0.75)
-      col= '#ddd';
-      else if (num > 0.5)
-      col= '#aaa';
-      else if (num > 0.25)
-      col= '#ccc';
-      else
-      col= '#999';
-      colors[d.id] = col;
-
-      });
-
    var g = pts.append('g').attr('class', 'point')
 
    
@@ -141,9 +154,7 @@ function init(pts) {
      .attr('cx', size * 0.5)
      .attr('cy', size * 0.5) */
    g.append('image')
-       .attr('width', size * 4)
-       .attr('height', size * 4)
-       .attr('xlink:href', '/images/tile.png')
+       .attr('title', function(d) { return d.label })
        .attr('image-rendering', 'optimizeSpeed');
 
 g.on('mouseover', function() {
@@ -157,11 +168,19 @@ g.on('mouseout', function() {
 }
 
 function _getTile(x, y) {
-   if (x < 0 || x >= count || y < 0 || y >= count)
-      return {}
-    var index = x * count + y;
-    var result = curlist.data[index] || {};
-    return result;
+    if (!grid[x] || !grid[x][y])
+        return {'x': x, 'y': y, 'version': -1, 'last_version': -1};
+    return grid[x][y];
+}
+
+function _getTiles(minx, miny, maxx, maxy) {
+    var tiles = [], x, y;
+    for (x = minx; x <= maxx; x++) {
+        for (y = miny; y <= maxy; y++) {
+            tiles.push(_getTile(x, y));
+        }
+    }
+    return tiles;
 }
 function _tileXY(d) {
 //    if (d.type != 'p')
@@ -180,6 +199,7 @@ function _tileXY(d) {
     }
 }
 function _tileXForm(d) {
+    if (!d.type) return '';
     var xy = _tileXY(d);
     return 'translate(' + [
         xy.x * -size,
@@ -187,8 +207,19 @@ function _tileXForm(d) {
     ].join(',') + ')';
 }
 function _tileClip(d) {
+    if (!d.type) return '';
     var xy = _tileXY(d);
     return "url(#tile-clip-" + xy.x + '-' + xy.y + ")";
+}
+function _tileSize(d) {
+    if (d.type)
+        return size * 4;
+    return size;
+}
+function _tileSrc(d) {
+    if (d.type)
+        return '/images/tile.png';
+    return '/images/unknown.png';
 }
 
 function _transform(uselast) {
@@ -198,18 +229,20 @@ function _transform(uselast) {
   }
 }
 
-function styles(pts) {
+function move(pts) {
    pts.attr('transform', _transform(true));
    pts.transition().duration(1000).attr('transform', _transform());
+}
+
+function styles(pts) {
    pts.select('image')
+     .attr('width', _tileSize)
+     .attr('height', _tileSize)
+     .attr('xlink:href', _tileSrc)
      .attr('clip-path', _tileClip)
      .attr('transform', _tileXForm);
-   pts.select('rect')
-     .attr('fill', color)
-     .attr('stroke', function(d) {
-        if (d.clear) return 'transparent';
-        return '#999'});       
 
+   /*
    pts.select('circle')
       .attr('stroke', function(d) {
         if (!d.clear)
@@ -234,6 +267,7 @@ function styles(pts) {
             return 'red';
          return 'transparent';
      })
+     */
 }
 
 function check(pt, ox, oy) {
