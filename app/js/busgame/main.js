@@ -1,9 +1,19 @@
 require(["d3", "wq/store"], function(d3, ds) {
 ds.init('');
+var ptypes;
+ds.getList({'url': 'pointtypes'}, function(list) {
+    ptypes = list;
+});
 localStorage.clear();
 
 var pcolors = ['#99f', '#f9f', '#9ff', '#f99', '#ff9', '#9f9'];
 var pcolor = pcolors[Math.floor(Math.random()*pcolors.length)];
+var layouts = {
+    'tile-1': [1, 1],
+    'alt-4': [2, 2],
+    'anim-4': [4, 1],
+    'auto-16': [4, 4]
+}
 
 /*var player = {};
 ds.save({
@@ -92,6 +102,14 @@ function hcolor(d) {
   else
     return '#eef';
 }
+setInterval(anim, 1000);
+var frame = 0;
+function anim() {
+    frame++;
+    if (frame > 3)
+        frame = 0;
+    render2();
+}
 setInterval(update, 2000);
 function update() {
     var minx = scope.x,
@@ -122,6 +140,7 @@ function update() {
 
 var colors = [];
 function render2(doMove) {
+    if (!ptypes) return;
     var minx = o.x - 1,
         maxx = o.x + o.w + 1,
         miny = o.y - 1,
@@ -182,13 +201,29 @@ function _getTiles(minx, miny, maxx, maxy) {
     }
     return tiles;
 }
+
+var _variant = {};
 function _tileXY(d) {
-//    if (d.type != 'p')
-//        return {'x': -1, 'y': -1};
-    var l = _getTile(d.x - 1, d.y).type == d.type;
-    var r = _getTile(d.x + 1, d.y).type == d.type;
-    var u = _getTile(d.x, d.y - 1).type == d.type;
-    var d = _getTile(d.x, d.y + 1).type == d.type;
+    var type = ptypes.find(d.type_id);
+    if (!type || type.layout == 'tile-1')
+        return {'x': 0, 'y': 0};
+    if (type.layout == 'alt-4') {
+        var key = d.x + ',' + d.y;
+        if (!_variant[key]) {
+            var dx = Math.random() < 0.5 ? 0 : 1;
+            var dy = Math.random() < 0.5 ? 0 : 1;
+            _variant[key] = {'x': dx, 'y': dy};
+         }
+         return _variant[key];
+    }
+    if (type.layout == 'anim-4')
+        return {'x': frame, 'y': 0};
+
+    // auto-16
+    var l = _getTile(d.x - 1, d.y).type_id == d.type_id;
+    var r = _getTile(d.x + 1, d.y).type_id == d.type_id;
+    var u = _getTile(d.x, d.y - 1).type_id == d.type_id;
+    var d = _getTile(d.x, d.y + 1).type_id == d.type_id;
 
     var tx = r + 3 * l - 2 * r * l;
     var ty = d + 3 * u - 2 * u * d;
@@ -199,7 +234,6 @@ function _tileXY(d) {
     }
 }
 function _tileXForm(d) {
-    if (!d.type) return '';
     var xy = _tileXY(d);
     return 'translate(' + [
         xy.x * -size,
@@ -207,18 +241,25 @@ function _tileXForm(d) {
     ].join(',') + ')';
 }
 function _tileClip(d) {
-    if (!d.type) return '';
     var xy = _tileXY(d);
     return "url(#tile-clip-" + xy.x + '-' + xy.y + ")";
 }
-function _tileSize(d) {
-    if (d.type)
-        return size * 4;
+function _tileWidth(d) {
+    var type = ptypes.find(d.type_id);
+    if (type && layouts[type.layout])
+        return layouts[type.layout][0] * size;
+    return size;
+}
+function _tileHeight(d) {
+    var type = ptypes.find(d.type_id);
+    if (type && layouts[type.layout])
+        return layouts[type.layout][1] * size;
     return size;
 }
 function _tileSrc(d) {
-    if (d.type)
-        return '/images/tile.png';
+    var type = ptypes.find(d.type_id);
+    if (type)
+        return '/media/' + type.path;
     return '/images/unknown.png';
 }
 
@@ -236,8 +277,8 @@ function move(pts) {
 
 function styles(pts) {
    pts.select('image')
-     .attr('width', _tileSize)
-     .attr('height', _tileSize)
+     .attr('width', _tileWidth)
+     .attr('height', _tileHeight)
      .attr('xlink:href', _tileSrc)
      .attr('clip-path', _tileClip)
      .attr('transform', _tileXForm);

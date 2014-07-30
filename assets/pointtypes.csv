@@ -1,0 +1,8 @@
+code,name,layout,path
+t,Treasure,anim-4,sprites/treasure.png
+j,Jump,tile-1,sprites/jump.png
+d,Diamond,anim-4,sprites/diamond.png
+g,Gold,tile-1,sprites/gold.png
+s,Silver,tile-1,sprites/silver.png
+b,Blank,alt-4,sprites/blank.png
+p,Wall,auto-16,sprites/tile.png

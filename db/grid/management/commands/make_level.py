@@ -1,5 +1,5 @@
 from django.core.management.base import NoArgsCommand
-from grid.models import Point
+from grid.models import Point, PointType
 import random
 
 
@@ -46,7 +46,8 @@ class Command(NoArgsCommand):
                 if t not in types:
                     types[t] = 0
                 types[t] += 1
-                Point.objects.create(x=x, y=y, type=t, version=1, clear=None)
+                ptype = PointType.objects.find(t)
+                Point.objects.create(x=x, y=y, type=ptype, clear=None)
 
         Point.objects.update(version=1)
         for t, count in types.items():
