@@ -9,6 +9,7 @@ class Command(NoArgsCommand):
         for row in types:
             ptype = PointType.objects.find(row.code)
             ptype.name = row.name
+            ptype.value = row.value
             ptype.layout = row.layout
             ptype.path = row.path
             ptype.save()

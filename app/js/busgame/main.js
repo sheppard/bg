@@ -1,5 +1,8 @@
 require(["d3", "wq/store"], function(d3, ds) {
 ds.init('');
+ds.prefetch({'url': 'login'}, function(l) {
+    ds.set('csrftoken', l.csrftoken);
+});
 var ptypes;
 ds.getList({'url': 'pointtypes'}, function(list) {
     ptypes = list;
@@ -29,10 +32,14 @@ var jumps = 1;
 var score = 0;
 //var version = 1;
 
-var size = 64;
+var size = 48;
 var space = 0;
 var count = 128; // should load from server
-var o = {'x': 32, 'y': 32, 'w': 8, 'h': 6};
+var wt = Math.floor((window.innerWidth - count) / size);
+var ht = Math.floor(window.innerHeight / size);
+var x = Math.round(Math.random() * count / 2 + count / 4);
+var y = Math.round(Math.random() * count / 2 + count / 4);
+var o = {'x': x, 'y': y, 'w': wt, 'h': ht};
 var last = {'x': o.x, 'y': o.y, 'w': o.w, 'h': o.h};
 var scope = {'x': o.x, 'y': o.y, 'w': 20, 'h': 20};
 var swidth = (size + space) * o.w;
@@ -50,7 +57,9 @@ function nav(d) {
         scope.x = o.x;
         scope.y = o.y;
     }
-    doMove = true;
+    if (Math.abs(last.x - o.x) > o.w / 2 - 2 || Math.abs(last.y - o.y) > o.h / 2 - 2) {
+        doMove = true;
+    }
 }
 
 var svg = d3.select('body').append('svg')
@@ -60,6 +69,17 @@ svg.append('rect')
    .attr('width', swidth + 10)
    .attr('height', sheight + 10)
    .attr('fill', '#999');
+
+var mini = d3.select('body').append('svg')
+   .attr('width', count)
+   .attr('height', count)
+   .attr('style', 'position:absolute;right:0;bottom:0;');
+
+mini.append('rect')
+   .attr('width', count)
+   .attr('height', count)
+   .attr('fill', '#000');
+
 var defs = svg.append('defs')
 defs.append('clipPath')
       .attr('id', 'clip')
@@ -91,12 +111,11 @@ doMove = true;
 render2();
 
 function color(d) {
+  if (d.pending)
+    return '#f90';
   if (d.clear)
     return d.clear;
-  else if (d.type == 'p')
-    return '#333';
-  else
-    return colors[d.id];
+  return 'transparent';
 }
 function hcolor(d) {
   if (d.clear)
@@ -112,7 +131,7 @@ function anim() {
         frame = 0;
     render2();
 }
-setInterval(update, 2000);
+update();
 function update() {
     var minx = scope.x - scope.w / 2,
         maxx = scope.x + scope.w / 2,
@@ -130,22 +149,28 @@ function update() {
     url += '&y__gte=' + miny;
     url += '&y__lte=' + maxy;
     d3.json(url, function(data) {
+        tiles.forEach(function(d) {
+            d.last_version = data.last_version;
+        });
         data.list.forEach(function(d) {
             d.last_version = data.last_version;
             if (!grid[d.x])
                 grid[d.x] = {};
+            if (grid[d.x][d.y] && grid[d.x][d.y].clear && !d.clear)
+                return;
             grid[d.x][d.y] = d;
         });
+        setTimeout(update, 500);
     });
 }
 
 var colors = [];
 function render2() {
     if (!ptypes) return;
-    var minx = o.x - o.w / 2 - 1,
-        maxx = o.x + o.w / 2 + 1,
-        miny = o.y - o.h / 2 - 1,
-        maxy = o.y + o.h / 2 + 1,
+    var minx = Math.floor(o.x - o.w / 2 - 1),
+        maxx = Math.ceil(o.x + o.w / 2 + 1),
+        miny = Math.floor(o.y - o.h / 2 - 1),
+        maxy = Math.ceil(o.y + o.h / 2 + 1),
         current = _getTiles(minx, miny, maxx, maxy);
 
     var pts = svg.selectAll('g.point')
@@ -160,24 +185,59 @@ function render2() {
         last.x = o.x;
         last.y = o.y;
     }
-    // d3.select('#jumps').text(jumps);
-    // d3.select('#score').text(score);
-    //d3.select('#version').text(version);
+    d3.select('#jumps').text(jumps);
+    d3.select('#score').text(score);
+    d3.select('#loc').text(o.x + ',' + o.y);
+}
+
+setInterval(_minimap, 2000);
+
+function _minimap() {
+    var pts = [];
+    for (var x in grid) {
+        for (var y in grid[x]) {
+            pts.push(grid[x][y]);
+        }
+    }
+    if (!pts.length) return;
+    var r = mini.selectAll('rect.data').data(pts, function(d) {return d.x + ',' + d.y });
+    r.enter().append('rect')
+        .attr('class', 'data')
+        .attr('width', 1)
+        .attr('height', 1)
+        .attr('x', function(d) { return d.x })
+        .attr('y', function(d) { return d.y });
+
+    r.attr('fill', function(d) {
+        if (d.clear)
+            return d.clear;
+        if (d.type_id == 'p')
+            return '#ddd';
+        return '#fff';
+    });
+    r.attr('opacity', function(d) {
+        if (d.x < scope.x - scope.w / 2 || d.x > scope.x + scope.w / 2 || d.y < scope.y - scope.h / 2 || d.y > scope.y + scope.h / 2)
+           return 0.25;
+        if (d.x < last.x - last.w / 2 || d.x > last.x + last.w / 2 || d.y < last.y - last.h / 2 || d.y > last.y + last.h / 2)
+           return 0.5;
+    });
+        
 }
 
 function init(pts) {
    var g = pts.append('g').attr('class', 'point')
+     .attr('transform', _transform(true));
 
    
-/*   pts.append('rect')
+   g.append('rect')
      .attr('width', size)
      .attr('height', size);
+   /*
    pts.append('circle')
      .attr('r', size * 0.4)
      .attr('cx', size * 0.5)
      .attr('cy', size * 0.5) */
    g.append('image')
-       .attr('title', function(d) { return d.label })
        .attr('image-rendering', 'optimizeSpeed');
 
 g.on('mouseover', function() {
@@ -281,12 +341,14 @@ function move(pts) {
 
 function styles(pts) {
    pts.select('image')
+     .attr('title', function(d) { return d.label })
      .attr('width', _tileWidth)
      .attr('height', _tileHeight)
      .attr('xlink:href', _tileSrc)
      .attr('clip-path', _tileClip)
      .attr('transform', _tileXForm);
 
+   pts.select('rect').attr('fill', color);
    /*
    pts.select('circle')
       .attr('stroke', function(d) {
@@ -316,23 +378,14 @@ function styles(pts) {
 }
 
 function check(pt, ox, oy) {
-   if (pt.x + ox < 0)
-      return false;
-   if (pt.x + ox >= count)
-      return false;
-   if (pt.y + oy < 0)
-      return false;
-   if (pt.y + oy >= count)
-      return false;
-   var index = ((pt.x+ox)*count)+(pt.y+oy);
-   return curlist.data[index].clear == pcolor;
+   return _getTile(pt.x + ox, pt.y + oy).clear == pcolor;
 }
 
 function click(d) {
    nav(d);
-   return;
-   if (d.type == 'p')
+   if (!d.type_id || d.type_id == 'p' || d.clear == pcolor)
       return;
+   var type = ptypes.find(d.type_id);
    var c1 = check(d, -1, 0)
        c2 = check(d,  1, 0)
        c3 = check(d, 0, -1)
@@ -343,30 +396,30 @@ function click(d) {
        jumps--;
        d3.select('#jumps').text(jumps)
    }
-   d3.select(this).selectAll('rect').attr('fill', '#f90')
-   if (d.clear) {
-       if (d.type == 'j')
-          jumps++;
-       if (d.type == 's')
-          score += 50;
-       if (d.type == 'g')
-          score += 100;
-       if (d.type == 'd')
-          score += 500;
-       if (d.type == 't')
-          score += 10000;
-       d.type = 'b';
-   }
+   d.pending = true;
+   if (d.type_id == 'j')
+      jumps++;
+   score += type.value;
+   d.type_id = 'c';
+   d.clear = pcolor;
+   render2();
 
    ds.save({
        'url': 'points/' + d.id,
        'method': 'PUT',
        'x': d.x,
        'y': d.y,
-       'type': d.type,
+       'type': d.type_id,
        'clear': pcolor,
-       'version': version
-   }, undefined, update);
+       'csrfmiddlewaretoken': ds.get('csrftoken'),
+       'csrftoken': ds.get('csrftoken')
+   }, undefined, function(item, result){
+       if (item.saved) {
+           result.last_version = result.version;
+           grid[result.x][result.y] = result;
+           render2();
+       }
+   });
 }
 
 });

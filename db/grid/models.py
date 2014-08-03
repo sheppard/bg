@@ -11,6 +11,7 @@ class PointType(models.NaturalKeyModel):
 
     code = models.CharField(max_length=1)
     name = models.CharField(max_length=255)
+    value = models.IntegerField(default=0)
     path = models.FileField(upload_to="sprites")
     layout = models.CharField(max_length=10, choices=LAYOUT_CHOICES)
 
@@ -26,12 +27,12 @@ class Point(models.Model):
     y = models.IntegerField(db_index=True)
     type = models.ForeignKey(PointType)
     clear = models.CharField(max_length=20, null=True, blank=True)
-    version = models.IntegerField(db_index=True)
+    version = models.IntegerField(db_index=True, null=True, blank=True)
 
     def save(self, *args, **kwargs):
         v = cache.get('version')
 	if not v:
-	    v = 1
+	    v = Point.objects.order_by('-version')[0].version
 	v += 1 
         
         self.version = v

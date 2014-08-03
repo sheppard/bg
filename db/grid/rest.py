@@ -5,8 +5,8 @@ from .views import PointViewSet
 
 app.router.register_model(
     Point,
-    per_page=20*20,
-    viewset=PointViewSet
+    per_page=21*21,
+    viewset=PointViewSet,
 )
 
 app.router.register_model(

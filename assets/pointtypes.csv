@@ -1,8 +1,9 @@
-code,name,layout,path
-t,Treasure,anim-4,sprites/treasure.png
-j,Jump,tile-1,sprites/jump.png
-d,Diamond,anim-4,sprites/diamond.png
-g,Gold,tile-1,sprites/gold.png
-s,Silver,tile-1,sprites/silver.png
-b,Blank,alt-4,sprites/blank.png
-p,Wall,auto-16,sprites/tile.png
+code,name,value,layout,path
+t,Treasure,10000,anim-4,sprites/treasure.png
+j,Jump,100,tile-1,sprites/jump.png
+d,Diamond,500,anim-4,sprites/diamond.png
+g,Gold,100,tile-1,sprites/gold.png
+s,Silver,50,tile-1,sprites/silver.png
+b,Blank,10,alt-4,sprites/blank.png
+p,Wall,0,auto-16,sprites/tile2.png
+c,Clear,5,tile-1,sprites/clear.png

@@ -31,6 +31,7 @@ INSTALLED_APPS = (
 
     'rest_framework',
 
+    'wq.db.rest.auth',
     'wq.db.patterns.annotate',
     'grid',
     'game',
@@ -62,7 +63,7 @@ from wq.db.rest.settings import (
     DEFAULT_AUTH_GROUP,
     DISAMBIGUATE
 )
-ANONYMOUS_PERMISSIONS = ("grid.point_change", "game.player_add")
+ANONYMOUS_PERMISSIONS = ("grid.change_point", "game.add_player")
 
 # wq: Social auth (see http://psa.matiasaguirre.net/docs/backends/)
 AUTHENTICATION_BACKENDS = (
