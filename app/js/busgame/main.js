@@ -13,7 +13,8 @@ var layouts = {
     'alt-4': [2, 2],
     'anim-4': [4, 1],
     'auto-16': [4, 4]
-}
+};
+var doMove;
 
 /*var player = {};
 ds.save({
@@ -31,26 +32,26 @@ var score = 0;
 var size = 64;
 var space = 0;
 var count = 128; // should load from server
-var o = {'x': 10, 'y': 10, 'w': 8, 'h': 6};
+var o = {'x': 32, 'y': 32, 'w': 8, 'h': 6};
 var last = {'x': o.x, 'y': o.y, 'w': o.w, 'h': o.h};
-var scope = {'x': o.x - 4, 'y': o.y - 4, 'w': 16, 'h': 16};
+var scope = {'x': o.x, 'y': o.y, 'w': 20, 'h': 20};
 var swidth = (size + space) * o.w;
 var sheight = (size + space) * o.h;
 var grid = {}
 
-setInterval(function() {
-    o.x += Math.round(Math.random() * 5 - 2.5);
-    o.y += Math.round(Math.random() * 5 - 2.5);
-    if (o.x < -2) o.x = -2;
-    if (o.y < -2) o.y = -2;
-    if (o.x > count + 2) o.x = count;
-    if (o.y > count + 2) o.y = count;
-    scope.x = o.x - 4;
-    scope.y = o.y - 4;
-    render2(true);
-    last.x = o.x;
-    last.y = o.y;
-}, 5000);
+function nav(d) {
+    o.x = d.x;
+    o.y = d.y;
+    if (o.x < 0) o.x = 0;
+    if (o.y < 0) o.y = 0;
+    if (o.x > count) o.x = count;
+    if (o.y > count) o.y = count;
+    if (Math.abs(scope.x - o.x) > 3 || Math.abs(scope.y - o.y) > 3) {
+        scope.x = o.x;
+        scope.y = o.y;
+    }
+    doMove = true;
+}
 
 var svg = d3.select('body').append('svg')
    .attr('width', swidth + 10)
@@ -86,7 +87,8 @@ svg.append('rect')
    .attr('height', sheight)
    .attr('fill', '#fff');
 
-render2(true);
+doMove = true;
+render2();
 
 function color(d) {
   if (d.clear)
@@ -112,10 +114,10 @@ function anim() {
 }
 setInterval(update, 2000);
 function update() {
-    var minx = scope.x,
-        maxx = scope.x + scope.w,
-        miny = scope.y,
-        maxy = scope.y + scope.h;
+    var minx = scope.x - scope.w / 2,
+        maxx = scope.x + scope.w / 2,
+        miny = scope.y - scope.h / 2,
+        maxy = scope.y + scope.h / 2;
     var tiles = _getTiles(minx, miny, maxx, maxy);
     var last_version = 100000000;
     tiles.forEach(function(d) {
@@ -134,17 +136,16 @@ function update() {
                 grid[d.x] = {};
             grid[d.x][d.y] = d;
         });
-        render2();
     });
 }
 
 var colors = [];
-function render2(doMove) {
+function render2() {
     if (!ptypes) return;
-    var minx = o.x - 1,
-        maxx = o.x + o.w + 1,
-        miny = o.y - 1,
-        maxy = o.y + o.h + 1,
+    var minx = o.x - o.w / 2 - 1,
+        maxx = o.x + o.w / 2 + 1,
+        miny = o.y - o.h / 2 - 1,
+        maxy = o.y + o.h / 2 + 1,
         current = _getTiles(minx, miny, maxx, maxy);
 
     var pts = svg.selectAll('g.point')
@@ -155,6 +156,9 @@ function render2(doMove) {
         move(pts);
         pts.exit().transition().duration(1000)
             .attr('transform', _transform()).remove();
+        doMove = false;
+        last.x = o.x;
+        last.y = o.y;
     }
     // d3.select('#jumps').text(jumps);
     // d3.select('#score').text(score);
@@ -266,7 +270,7 @@ function _tileSrc(d) {
 function _transform(uselast) {
   var offset = uselast ? last : o;
   return function(d) {
-    return 'translate(' + ((-offset.x + d.x)*(size+space)) + ',' + ((-offset.y + d.y)*(size+space)) + ')';
+    return 'translate(' + ((-offset.x + offset.w / 2 + d.x)*(size+space)) + ',' + ((-offset.y + offset.h / 2 + d.y)*(size+space)) + ')';
   }
 }
 
@@ -325,6 +329,8 @@ function check(pt, ox, oy) {
 }
 
 function click(d) {
+   nav(d);
+   return;
    if (d.type == 'p')
       return;
    var c1 = check(d, -1, 0)
