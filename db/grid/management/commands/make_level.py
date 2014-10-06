@@ -17,6 +17,8 @@ class Command(NoArgsCommand):
         def random_item():
             t = 'b'
             if random.random() > 0.7:
+                t = 'c'
+            if random.random() > 0.8:
                 t = 's'
                 if random.random() > 0.7:
                    t = 'g'
@@ -35,9 +37,11 @@ class Command(NoArgsCommand):
                 t = 'b'
                 if x == 0 or y == 0 or x == count-1 or y == count-1:
                     t = 'p'
-                elif x % 2 == 0 and y % 2 == 0:
+                elif x % 2 == 0 and y % 2 == 0 and random.random() > 0.2:
                     t = 'p'
                 elif (x % 2 == 0 or y % 2 == 0) and random.random() > 0.7:
+                    t = 'p'
+                elif random.random() > 0.99:
                     t = 'p'
 
                 if t == 'b':

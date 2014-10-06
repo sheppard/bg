@@ -32,7 +32,11 @@ class Point(models.Model):
     def save(self, *args, **kwargs):
         v = cache.get('version')
 	if not v:
-	    v = Point.objects.order_by('-version')[0].version
+            pts = Point.objects.order_by('-version')
+            if pts.count() > 0:
+                v = pts[0].version
+            else:
+                v = 0
 	v += 1 
         
         self.version = v

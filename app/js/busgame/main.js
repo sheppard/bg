@@ -32,7 +32,11 @@ var jumps = 1;
 var score = 0;
 //var version = 1;
 
-var size = 48;
+var size;
+if (window.innerWidth < 1000 && window.innerHeight < 700)
+    size = 48;
+else
+    size = 64;
 var space = 0;
 var count = 128; // should load from server
 var wt = Math.floor((window.innerWidth - count) / size);
@@ -212,14 +216,14 @@ function _minimap() {
         if (d.clear)
             return d.clear;
         if (d.type_id == 'p')
-            return '#ddd';
+            return '#999';
         return '#fff';
     });
     r.attr('opacity', function(d) {
         if (d.x < scope.x - scope.w / 2 || d.x > scope.x + scope.w / 2 || d.y < scope.y - scope.h / 2 || d.y > scope.y + scope.h / 2)
-           return 0.25;
+           return 0.33;
         if (d.x < last.x - last.w / 2 || d.x > last.x + last.w / 2 || d.y < last.y - last.h / 2 || d.y > last.y + last.h / 2)
-           return 0.5;
+           return 0.67;
     });
         
 }
