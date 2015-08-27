@@ -26,29 +26,22 @@ ALLOWED_HOSTS = ["busgame"]
 # Application definition
 
 INSTALLED_APPS = (
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-
     'rest_framework',
-
-    'wq.db.rest.auth',
-    'wq.db.patterns.annotate',
+    'wq.db.rest',
     'grid',
     'game',
-
 )
 
 MIDDLEWARE_CLASSES = (
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
 # wq: Recommended settings for Django, rest_framework, and social auth
-from wq.db.rest.settings import (
+from wq.db.default_settings import (
     TEMPLATE_LOADERS,
     TEMPLATE_CONTEXT_PROCESSORS,
     SESSION_COOKIE_HTTPONLY,
@@ -57,7 +50,7 @@ from wq.db.rest.settings import (
 )
 
 # wq: Recommended settings unique to wq.db
-from wq.db.rest.settings import (
+from wq.db.default_settings import (
     ANONYMOUS_PERMISSIONS,
     SRID,
     DEFAULT_AUTH_GROUP,

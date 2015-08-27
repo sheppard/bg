@@ -2,7 +2,7 @@ requirejs.config({
     'baseUrl': '/js/lib',
     'paths': {
         'busgame': '../busgame',
-        'db': '../../'
+        'data': '../data/'
     }
 });
 

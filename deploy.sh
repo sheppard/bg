@@ -3,6 +3,9 @@
 # Exit on error
 set -e
 
+# Dump wq configuration object to file
+db/manage.py dump_config --format amd > app/js/data/config.js
+
 # Build javascript with wq.app
 cd app;
 wq build $1;
@@ -18,7 +21,7 @@ if [ -d htdocs/static ]; then
 fi;
 
 # Replace existing htdocs with new version
-rm -rf htdocs/;
+rm -rf htdocs;
 mv -i htdocs-build/ htdocs;
 
 # Restart Django

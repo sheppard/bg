@@ -1,13 +1,16 @@
-require(["d3", "wq/store"], function(d3, ds) {
-ds.init('');
-ds.prefetch({'url': 'login'}, function(l) {
-    ds.set('csrftoken', l.csrftoken);
-});
+require(["d3", "wq/store", "wq/model"], function(d3, ds, model) {
+ds.init({'service': ''});
 var ptypes;
-ds.getList({'url': 'pointtypes'}, function(list) {
-    ptypes = list;
+model('/pointtypes').load().then(function(data) {
+    ptypes = {};
+    data.list.forEach(function(ptype) {
+        ptype.image = new Image();
+        ptype.image.src = ptype.path;
+        ptypes[ptype.id] = ptype;
+    });
 });
-localStorage.clear();
+var unknown = new Image();
+unknown.src = '/images/unknown.png';
 
 var pcolors = ['#99f', '#f9f', '#9ff', '#f99', '#ff9', '#9f9'];
 var pcolor = pcolors[Math.floor(Math.random()*pcolors.length)];
@@ -17,7 +20,6 @@ var layouts = {
     'anim-4': [4, 1],
     'auto-16': [4, 4]
 };
-var doMove;
 
 /*var player = {};
 ds.save({
@@ -50,6 +52,7 @@ var swidth = (size + space) * o.w;
 var sheight = (size + space) * o.h;
 var grid = {}
 
+
 function nav(d) {
     o.x = d.x;
     o.y = d.y;
@@ -61,59 +64,49 @@ function nav(d) {
         scope.x = o.x;
         scope.y = o.y;
     }
-    if (Math.abs(last.x - o.x) > o.w / 2 - 2 || Math.abs(last.y - o.y) > o.h / 2 - 2) {
-        doMove = true;
+    if (o.x != last.x || o.y != last.y) {
+        noffset.attr('x', last.x);
+        noffset.attr('y', last.y);
+        o.b = 5;
+        noffset.transition().duration(300)
+           .attr('x', o.x)
+           .attr('y', o.y)
+           .each('end', function() {
+               o.b = 1;
+           });
+        last.x = o.x;
+        last.y = o.y;
     }
 }
 
-var svg = d3.select('body').append('svg')
-   .attr('width', swidth + 10)
-   .attr('height', sheight + 10);
-svg.append('rect')
-   .attr('width', swidth + 10)
-   .attr('height', sheight + 10)
-   .attr('fill', '#999');
-
-var mini = d3.select('body').append('svg')
-   .attr('width', count)
-   .attr('height', count)
-   .attr('style', 'position:absolute;right:0;bottom:0;');
-
-mini.append('rect')
-   .attr('width', count)
-   .attr('height', count)
-   .attr('fill', '#000');
-
-var defs = svg.append('defs')
-defs.append('clipPath')
-      .attr('id', 'clip')
-   .append('rect')
-      .attr('x', 0)
-      .attr('y', 0)
-      .attr('width', swidth)
-      .attr('height', sheight);
-[0, 1, 2, 3].forEach(function(x) {
-    [0, 1, 2, 3].forEach(function(y) {
-        defs.append('clipPath')
-           .attr('id', 'tile-clip-' + x + '-' + y)
-           .append('rect')
-               .attr('x', x * size)
-               .attr('y', y * size)
-               .attr('width', size)
-               .attr('height', size);
-    });
-});
-svg = svg.append('g')
-   .attr('transform', 'translate(5,5)')
-   .attr('clip-path', 'url(#clip)');
-svg.append('rect')
+var canvas = d3.select('body').append('canvas')
    .attr('width', swidth)
-   .attr('height', sheight)
-   .attr('fill', '#fff');
+   .attr('height', sheight);
+canvas.on('click', function(evt) {
+    var evt = d3.event;
+    nav({
+        'x': Math.round(evt.x / size) + o.x - (o.w / 2),
+        'y': Math.round(evt.y / size) + o.y - (o.h / 2),
+   });
+});
+var context = canvas.node().getContext('2d');
 
-doMove = true;
-render2();
+var mini = d3.select('body').append('canvas')
+    .attr('width', count)
+    .attr('height', count)
+    .attr('style', 'position:absolute;right:0;bottom:0;');
+var minicontext = mini.node().getContext('2d');
+var minipixel = minicontext.createImageData(1, 1);
 
+var custom = d3.select(document.createElement('custom-elem'));
+var minielem = d3.select(document.createElement('custom-elem-mini'));
+var noffset = d3.select(document.createElement('custom-elem-offset'));
+
+noffset.attr('x', o.x);
+noffset.attr('y', o.y);
+o.b = 1;
+
+var colors = [];
 function color(d) {
   if (d.pending)
     return '#f90';
@@ -127,14 +120,15 @@ function hcolor(d) {
   else
     return '#eef';
 }
-setInterval(anim, 1000);
+
+setInterval(anim, 250);
 var frame = 0;
 function anim() {
     frame++;
     if (frame > 3)
         frame = 0;
-    render2();
 }
+
 update();
 function update() {
     var minx = scope.x - scope.w / 2,
@@ -164,38 +158,38 @@ function update() {
                 return;
             grid[d.x][d.y] = d;
         });
-        setTimeout(update, 500);
+        setTimeout(update, 1000);
     });
 }
 
-var colors = [];
-function render2() {
+d3.timer(render);
+function render() {
     if (!ptypes) return;
-    var minx = Math.floor(o.x - o.w / 2 - 1),
-        maxx = Math.ceil(o.x + o.w / 2 + 1),
-        miny = Math.floor(o.y - o.h / 2 - 1),
-        maxy = Math.ceil(o.y + o.h / 2 + 1),
+    var minx = Math.floor(o.x - o.w / 2 - o.b),
+        maxx = Math.ceil(o.x + o.w / 2 + o.b),
+        miny = Math.floor(o.y - o.h / 2 - o.b),
+        maxy = Math.ceil(o.y + o.h / 2 + o.b),
         current = _getTiles(minx, miny, maxx, maxy);
 
-    var pts = svg.selectAll('g.point')
+    var pts = custom.selectAll('tile')
         .data(current, function(d){return d.x + ',' + d.y});
-    init(pts.enter());
-    styles(pts);
-    if (doMove) {
-        move(pts);
-        pts.exit().transition().duration(1000)
-            .attr('transform', _transform()).remove();
-        doMove = false;
-        last.x = o.x;
-        last.y = o.y;
-    }
+    pts.enter().append('tile');
+    draw(pts);
     d3.select('#jumps').text(jumps);
     d3.select('#score').text(score);
     d3.select('#loc').text(o.x + ',' + o.y);
 }
 
-setInterval(_minimap, 2000);
+/*
+g.on('mouseover', function() {
+//   d3.select(this).selectAll('rect').attr('fill', hcolor)
+});
+g.on('mouseout', function() {
+//   d3.select(this).selectAll('rect').attr('fill', color);
+});
+*/
 
+setInterval(_minimap, 1000);
 function _minimap() {
     var pts = [];
     for (var x in grid) {
@@ -204,11 +198,8 @@ function _minimap() {
         }
     }
     if (!pts.length) return;
-    var r = mini.selectAll('rect.data').data(pts, function(d) {return d.x + ',' + d.y });
-    r.enter().append('rect')
-        .attr('class', 'data')
-        .attr('width', 1)
-        .attr('height', 1)
+    var r = minielem.selectAll('tile').data(pts, function(d) {return d.x + ',' + d.y });
+    r.enter().append('tile')
         .attr('x', function(d) { return d.x })
         .attr('y', function(d) { return d.y });
 
@@ -222,37 +213,28 @@ function _minimap() {
     r.attr('opacity', function(d) {
         if (d.x < scope.x - scope.w / 2 || d.x > scope.x + scope.w / 2 || d.y < scope.y - scope.h / 2 || d.y > scope.y + scope.h / 2)
            return 0.33;
-        if (d.x < last.x - last.w / 2 || d.x > last.x + last.w / 2 || d.y < last.y - last.h / 2 || d.y > last.y + last.h / 2)
+        if (d.x < o.x - o.w / 2 || d.x > o.x + o.w / 2 || d.y < o.y - o.h / 2 || d.y > o.y + o.h / 2)
            return 0.67;
+        return 1;
     });
-        
+    r.each(function(d) {
+        var node = d3.select(this);
+        var p = minipixel.data;
+        var fill = node.attr('fill');
+        var opacity = node.attr('opacity');
+        var x = node.attr('x');
+        var y = node.attr('y');
+        var r = parseInt(fill.charAt(1), 16) * 0x11;
+        var g = parseInt(fill.charAt(2), 16) * 0x11;
+        var b = parseInt(fill.charAt(3), 16) * 0x11;
+        p[0] = r;
+        p[1] = g;
+        p[2] = b;
+        p[3] = Math.round(opacity * 255);
+        minicontext.putImageData(minipixel, x, y);
+    });
 }
 
-function init(pts) {
-   var g = pts.append('g').attr('class', 'point')
-     .attr('transform', _transform(true));
-
-   
-   g.append('rect')
-     .attr('width', size)
-     .attr('height', size);
-   /*
-   pts.append('circle')
-     .attr('r', size * 0.4)
-     .attr('cx', size * 0.5)
-     .attr('cy', size * 0.5) */
-   g.append('image')
-       .attr('image-rendering', 'optimizeSpeed');
-
-g.on('mouseover', function() {
-//   d3.select(this).selectAll('rect').attr('fill', hcolor)
-});
-g.on('mouseout', function() {
-//   d3.select(this).selectAll('rect').attr('fill', color);
-});
-   g.on('click', click);
-   return pts;
-}
 
 function _getTile(x, y) {
     if (!grid[x] || !grid[x][y])
@@ -272,7 +254,7 @@ function _getTiles(minx, miny, maxx, maxy) {
 
 var _variant = {};
 function _tileXY(d) {
-    var type = ptypes.find(d.type_id);
+    var type = ptypes[d.type_id];
     if (!type || type.layout == 'tile-1')
         return {'x': 0, 'y': 0};
     if (type.layout == 'alt-4') {
@@ -301,84 +283,42 @@ function _tileXY(d) {
         'y': ty
     }
 }
-function _tileXForm(d) {
-    var xy = _tileXY(d);
-    return 'translate(' + [
-        xy.x * -size,
-        xy.y * -size,
-    ].join(',') + ')';
-}
-function _tileClip(d) {
-    var xy = _tileXY(d);
-    return "url(#tile-clip-" + xy.x + '-' + xy.y + ")";
-}
-function _tileWidth(d) {
-    var type = ptypes.find(d.type_id);
-    if (type && layouts[type.layout])
-        return layouts[type.layout][0] * size;
-    return size;
-}
-function _tileHeight(d) {
-    var type = ptypes.find(d.type_id);
-    if (type && layouts[type.layout])
-        return layouts[type.layout][1] * size;
-    return size;
-}
-function _tileSrc(d) {
-    var type = ptypes.find(d.type_id);
-    if (type)
-        return '/media/' + type.path;
-    return '/images/unknown.png';
-}
 
-function _transform(uselast) {
-  var offset = uselast ? last : o;
-  return function(d) {
-    return 'translate(' + ((-offset.x + offset.w / 2 + d.x)*(size+space)) + ',' + ((-offset.y + offset.h / 2 + d.y)*(size+space)) + ')';
-  }
-}
-
-function move(pts) {
-   pts.attr('transform', _transform(true));
-   pts.transition().duration(1000).attr('transform', _transform());
-}
-
-function styles(pts) {
-   pts.select('image')
-     .attr('title', function(d) { return d.label })
-     .attr('width', _tileWidth)
-     .attr('height', _tileHeight)
-     .attr('xlink:href', _tileSrc)
-     .attr('clip-path', _tileClip)
-     .attr('transform', _tileXForm);
-
-   pts.select('rect').attr('fill', color);
-   /*
-   pts.select('circle')
-      .attr('stroke', function(d) {
-        if (!d.clear)
-           return 'transparent';
-        if (d.type == 'b')
-           return 'transparent';
-
-        return '#999';
-     })
-     .attr('fill', function(d) {
-         if (!d.clear)
-            return 'transparent';
-         if (d.type == 'j')
-            return 'green';
-         if (d.type == 'g')
-            return 'gold';
-         if (d.type == 'd')
-            return '#eee';
-         if (d.type == 's')
-            return 'white';
-         if (d.type == 't')
-            return 'red';
-         return 'transparent';
-     })
-     */
+function draw(pts) {
+   pts.attr('x', function(d) {
+       var ox = noffset.attr('x');
+       return (-ox + o.w / 2 + d.x) * (size+space);
+   });
+   pts.attr('y', function(d) {
+       var oy = noffset.attr('y');
+       return (-oy + o.h / 2 + d.y) * (size+space);
+   });
+   pts.attr('tile-x', function(d) {
+       return _tileXY(d).x * size / 2;
+   });
+   pts.attr('tile-y', function(d) {
+       return _tileXY(d).y * size / 2;
+   });
+   pts.each(function(d) {
+       var node = d3.select(this);
+       var ptype = ptypes[d.type_id];
+       if (!ptype || !ptype.image) {
+           image = unknown;
+       } else {
+           image = ptype.image;
+       }
+       context.drawImage(
+           image,
+           node.attr('tile-x'),
+           node.attr('tile-y'),
+           size / 2,
+           size / 2,
+           node.attr('x'),
+           node.attr('y'),
+           size,
+           size
+       );
+   });
 }
 
 function check(pt, ox, oy) {

@@ -1,7 +1,8 @@
-from wq.db.patterns import models
+from django.db import models
+from wq.db.patterns.base.models import NaturalKeyModel
 from django.core.cache import cache
 
-class PointType(models.NaturalKeyModel):
+class PointType(NaturalKeyModel):
     LAYOUT_CHOICES = [
         ('tile-1', 'Single Tile'),
         ('alt-4', 'Four alternating tiles'),
@@ -15,7 +16,7 @@ class PointType(models.NaturalKeyModel):
     path = models.FileField(upload_to="sprites")
     layout = models.CharField(max_length=10, choices=LAYOUT_CHOICES)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name
 
     class Meta:
@@ -31,20 +32,20 @@ class Point(models.Model):
 
     def save(self, *args, **kwargs):
         v = cache.get('version')
-	if not v:
+        if not v:
             pts = Point.objects.order_by('-version')
             if pts.count() > 0:
                 v = pts[0].version
             else:
                 v = 0
-	v += 1 
-        
-        self.version = v
-	cache.set('version', v)
-	super(Point, self).save(*args, **kwargs)
+        v += 1 
 
-    def __unicode__(self):
+        self.version = v
+        cache.set('version', v)
+        super(Point, self).save(*args, **kwargs)
+
+    def __str__(self):
         return "%s, %s: %s" % (self.x, self.y, self.type)
-    
+
     class Meta:
         ordering = ('x','y')

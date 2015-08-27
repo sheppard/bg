@@ -2,7 +2,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'NAME': 'busgame',
-        'USER': 'sheppard',
+        'USER': 'busgame',
         'PASSWORD': '',
         'HOST': '',
         'PORT': '',

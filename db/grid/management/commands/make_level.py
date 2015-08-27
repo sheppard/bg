@@ -54,5 +54,5 @@ class Command(NoArgsCommand):
                 Point.objects.create(x=x, y=y, type=ptype, clear=None)
 
         Point.objects.update(version=1)
-        for t, count in types.items():
-            print '%s: %s' % (t, count)
+        for t, count in list(types.items()):
+            print('%s: %s' % (t, count))

@@ -1,4 +1,4 @@
-from wq.db.rest import app
+from wq.db import rest
 from .models import Player
 
-app.router.register_model(Player)
+rest.router.register_model(Player)
