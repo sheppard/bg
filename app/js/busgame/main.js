@@ -34,23 +34,29 @@ var jumps = 1;
 var score = 0;
 //var version = 1;
 
-var size;
-if (window.innerWidth < 1000 && window.innerHeight < 700)
-    size = 48;
-else
-    size = 64;
-var space = 0;
+var tileSize = 32;
+var renderSize = tileSize;
+var bounds = {
+    'w': document.body.clientWidth,
+    'h': document.body.clientHeight
+};
+var length = bounds.w > bounds.h ? bounds.w : bounds.h;
+while(length / renderSize > 16) {
+    renderSize += tileSize / 2;
+}
 var count = 128; // should load from server
-var wt = Math.floor((window.innerWidth - count) / size);
-var ht = Math.floor(window.innerHeight / size);
-var x = Math.round(Math.random() * count / 2 + count / 4);
-var y = Math.round(Math.random() * count / 2 + count / 4);
-var o = {'x': x, 'y': y, 'w': wt, 'h': ht};
+var o = {};
+o.x = Math.round(Math.random() * count / 2 + count / 4);
+o.y = Math.round(Math.random() * count / 2 + count / 4);
+o.w = Math.floor(bounds.w / renderSize / 2) * 2;
+o.h = Math.floor(bounds.h / renderSize / 2) * 2;
 var last = {'x': o.x, 'y': o.y, 'w': o.w, 'h': o.h};
 var scope = {'x': o.x, 'y': o.y, 'w': 20, 'h': 20};
-var swidth = (size + space) * o.w;
-var sheight = (size + space) * o.h;
-var grid = {}
+var swidth = renderSize * o.w;
+var sleft = (bounds.w - swidth) / 2;
+var sheight = renderSize * o.h;
+var stop = (bounds.h - sheight) / 2;
+var grid = {};
 
 
 function nav(d) {
@@ -80,13 +86,16 @@ function nav(d) {
 }
 
 var canvas = d3.select('body').append('canvas')
+   .style('position', 'absolute')
    .attr('width', swidth)
-   .attr('height', sheight);
+   .attr('height', sheight)
+   .style('left', sleft)
+   .style('top', stop);
 canvas.on('click', function(evt) {
     var evt = d3.event;
     nav({
-        'x': Math.round(evt.x / size) + o.x - (o.w / 2),
-        'y': Math.round(evt.y / size) + o.y - (o.h / 2),
+        'x': Math.round(evt.x / renderSize) + o.x - (o.w / 2),
+        'y': Math.round(evt.y / renderSize) + o.y - (o.h / 2),
    });
 });
 var context = canvas.node().getContext('2d');
@@ -287,17 +296,17 @@ function _tileXY(d) {
 function draw(pts) {
    pts.attr('x', function(d) {
        var ox = noffset.attr('x');
-       return (-ox + o.w / 2 + d.x) * (size+space);
+       return (-ox + o.w / 2 + d.x) * renderSize;
    });
    pts.attr('y', function(d) {
        var oy = noffset.attr('y');
-       return (-oy + o.h / 2 + d.y) * (size+space);
+       return (-oy + o.h / 2 + d.y) * renderSize;
    });
    pts.attr('tile-x', function(d) {
-       return _tileXY(d).x * size / 2;
+       return _tileXY(d).x * tileSize;
    });
    pts.attr('tile-y', function(d) {
-       return _tileXY(d).y * size / 2;
+       return _tileXY(d).y * tileSize;
    });
    pts.each(function(d) {
        var node = d3.select(this);
@@ -311,12 +320,12 @@ function draw(pts) {
            image,
            node.attr('tile-x'),
            node.attr('tile-y'),
-           size / 2,
-           size / 2,
+           tileSize,
+           tileSize,
            node.attr('x'),
            node.attr('y'),
-           size,
-           size
+           renderSize,
+           renderSize
        );
    });
 }
