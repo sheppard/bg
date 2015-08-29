@@ -9,8 +9,11 @@ model('/pointtypes').load().then(function(data) {
         ptypes[ptype.id] = ptype;
     });
 });
-var unknown = new Image();
-unknown.src = '/images/unknown.png';
+var unknown = {
+    'layout': 'anim-4',
+    'image': new Image()
+};
+unknown.image.src = '/images/spin.png';
 
 var pcolors = ['#99f', '#f9f', '#9ff', '#f99', '#ff9', '#9f9'];
 var pcolor = pcolors[Math.floor(Math.random()*pcolors.length)];
@@ -35,6 +38,7 @@ var score = 0;
 //var version = 1;
 
 var tileSize = 32;
+var bufferScale = 16;
 var renderSize = tileSize;
 var bounds = {
     'w': document.body.clientWidth,
@@ -59,7 +63,7 @@ var stop = (bounds.h - sheight) / 2;
 var grid = {};
 
 
-function nav(d) {
+function nav(d, anim) {
     o.x = d.x;
     o.y = d.y;
     if (o.x < 0) o.x = 0;
@@ -67,19 +71,26 @@ function nav(d) {
     if (o.x > count) o.x = count;
     if (o.y > count) o.y = count;
     if (Math.abs(scope.x - o.x) > 3 || Math.abs(scope.y - o.y) > 3) {
-        scope.x = o.x;
-        scope.y = o.y;
+        scope.x = Math.round(o.x);
+        scope.y = Math.round(o.y);
     }
-    if (o.x != last.x || o.y != last.y) {
-        noffset.attr('x', last.x);
-        noffset.attr('y', last.y);
-        o.b = 5;
-        noffset.transition().duration(300)
-           .attr('x', o.x)
-           .attr('y', o.y)
-           .each('end', function() {
-               o.b = 1;
-           });
+    if (anim) {
+        if (o.x != last.x || o.y != last.y) {
+            noffset.attr('x', last.x);
+            noffset.attr('y', last.y);
+            o.b = 5;
+            noffset.transition().duration(300)
+               .attr('x', o.x)
+               .attr('y', o.y)
+               .each('end', function() {
+                   o.b = 1;
+               });
+            last.x = o.x;
+            last.y = o.y;
+        }
+    } else {
+        noffset.attr('x', o.x);
+        noffset.attr('y', o.y);
         last.x = o.x;
         last.y = o.y;
     }
@@ -91,19 +102,42 @@ var canvas = d3.select('body').append('canvas')
    .attr('height', sheight)
    .style('left', sleft)
    .style('top', stop);
-canvas.on('click', function(evt) {
+
+var touchInfo = {};
+canvas.on('touchstart', function(evt) {
+    var touches = d3.touches(this);
+    touchInfo.start = {
+        'x': touches[0][0],
+        'y': touches[0][1]
+    }
+    touchInfo.offset = {
+        'x': o.x,
+        'y': o.y
+    };
+});
+canvas.on('touchmove', function(evt) {
+    var touches = d3.touches(this);
+    var tx = touches[0][0] - touchInfo.start.x;
+    var ty = touches[0][1] - touchInfo.start.y;
+    nav({
+        'x': touchInfo.offset.x - (tx / renderSize),
+        'y': touchInfo.offset.y - (ty / renderSize)
+    });
+});
+canvas.on('click', function() {
     var evt = d3.event;
     nav({
-        'x': Math.round(evt.x / renderSize) + o.x - (o.w / 2),
-        'y': Math.round(evt.y / renderSize) + o.y - (o.h / 2),
-   });
+        'x': Math.round(evt.x / renderSize + o.x) - (o.w / 2),
+        'y': Math.round(evt.y / renderSize + o.y) - (o.h / 2)
+   }, true);
 });
 var context = canvas.node().getContext('2d');
+var buffers = {};
 
 var mini = d3.select('body').append('canvas')
     .attr('width', count)
     .attr('height', count)
-    .attr('style', 'position:absolute;right:0;bottom:0;');
+    .attr('style', 'position:absolute;right:0;bottom:0;background-color:#333');
 var minicontext = mini.node().getContext('2d');
 var minipixel = minicontext.createImageData(1, 1);
 
@@ -130,12 +164,13 @@ function hcolor(d) {
     return '#eef';
 }
 
-setInterval(anim, 250);
+setInterval(anim, 100);
 var frame = 0;
 function anim() {
     frame++;
     if (frame > 3)
         frame = 0;
+    render();
 }
 
 update();
@@ -171,22 +206,80 @@ function update() {
     });
 }
 
-d3.timer(render);
+function _getViewport() {
+    var minx = Math.max(0, Math.floor(o.x - o.w / 2 - o.b)),
+        maxx = Math.min(count, Math.ceil(o.x + o.w / 2 + o.b)),
+        miny = Math.max(0, Math.floor(o.y - o.h / 2 - o.b)),
+        maxy = Math.min(count, Math.ceil(o.y + o.h / 2 + o.b));
+    return {
+        'min': {'x': minx, 'y': miny},
+        'max': {'x': maxx, 'y': maxy},
+    }
+}
+
+d3.timer(refresh);
+function refresh() {
+    var buffers = _getBuffers(_getViewport());
+    context.clearRect(0, 0, swidth, sheight);
+    buffers.forEach(function(buffer) {
+        var ox = (noffset.attr('x') - o.w / 2 - (buffer.x * bufferScale)) * renderSize;
+        var oy = (noffset.attr('y') - o.h / 2 - (buffer.y * bufferScale)) * renderSize;
+        context.drawImage(
+            buffer.canvas,
+            0,
+            0,
+            tileSize * bufferScale,
+            tileSize * bufferScale,
+            -ox,
+            -oy,
+            renderSize * bufferScale,
+            renderSize * bufferScale
+        );
+    });
+}
+
+
+setInterval(cleanup, 10000);
+function cleanup() {
+    var current = _getBuffers(_getViewport());
+    var tl = current[0];
+    var br = current[current.length - 1];
+    var x, y;
+    for (x in buffers) {
+        for (y in buffers[x]) {
+            if (x < tl.x - 1 || x > br.x + 1 || y < tl.y - 1 || y > br.y + 1) {
+                console.log("deleting buffer:" + x + ',' + y);
+                delete buffers[x][y];
+            }
+        }
+    }
+}
+
 function render() {
     if (!ptypes) return;
-    var minx = Math.floor(o.x - o.w / 2 - o.b),
-        maxx = Math.ceil(o.x + o.w / 2 + o.b),
-        miny = Math.floor(o.y - o.h / 2 - o.b),
-        maxy = Math.ceil(o.y + o.h / 2 + o.b),
+    var viewport = _getViewport(),
+        minx = viewport.min.x,
+        maxx = viewport.max.x,
+        miny = viewport.min.y,
+        maxy = viewport.max.y;
         current = _getTiles(minx, miny, maxx, maxy);
-
+    current.forEach(function(d) {
+        d.tileOffset = _tileXY(d);
+    });
     var pts = custom.selectAll('tile')
-        .data(current, function(d){return d.x + ',' + d.y});
-    pts.enter().append('tile');
-    draw(pts);
+        .data(current, function(d){
+            return (
+                d.x + '/' + d.y +
+                d.type_id + '/' +
+                d.tileOffset.x + '/' + d.tileOffset.y
+            );
+        });
+    draw(pts.enter().append('tile'));
+    pts.exit().remove();
+    // draw(pts);
     d3.select('#jumps').text(jumps);
     d3.select('#score').text(score);
-    d3.select('#loc').text(o.x + ',' + o.y);
+    d3.select('#loc').text(Math.round(o.x, 1) + ',' + Math.round(o.y, 1));
 }
 
 /*
@@ -248,7 +341,11 @@ function _minimap() {
 function _getTile(x, y) {
     if (!grid[x] || !grid[x][y])
         return {'x': x, 'y': y, 'version': -1, 'last_version': -1};
-    return grid[x][y];
+    var tile = {};
+    for (var key in grid[x][y]) {
+        tile[key] = grid[x][y][key];
+    }
+    return tile;
 }
 
 function _getTiles(minx, miny, maxx, maxy) {
@@ -261,9 +358,45 @@ function _getTiles(minx, miny, maxx, maxy) {
     return tiles;
 }
 
+function _getBuffer(x, y) {
+    var bufferX = Math.floor(x / bufferScale);
+    var bufferY = Math.floor(y / bufferScale);
+    var buffer;
+    if (!buffers[bufferX]) {
+        buffers[bufferX] = {};
+    }
+    if (buffers[bufferX][bufferY]) {
+        buffer = buffers[bufferX][bufferY];
+    } else {
+        buffer = buffers[bufferX][bufferY] = {
+            'x': bufferX,
+            'y': bufferY
+        };
+        buffer.canvas = document.createElement('canvas');
+        buffer.canvas.width = tileSize * bufferScale;
+        buffer.canvas.height = tileSize * bufferScale;
+        buffer.context = buffer.canvas.getContext('2d');
+    }
+    return buffer;
+}
+
+function _getBuffers(viewport) {
+    var minx = Math.floor(viewport.min.x / bufferScale);
+    var miny = Math.floor(viewport.min.y / bufferScale);
+    var maxx = Math.floor(viewport.max.x / bufferScale);
+    var maxy = Math.floor(viewport.max.y / bufferScale);
+    var buffers = [], x, y;
+    for (x = minx; x <= maxx; x++) {
+        for (y = miny; y <= maxy; y++) {
+            buffers.push(_getBuffer(x * bufferScale, y * bufferScale));
+        }
+    }
+    return buffers;
+}
+
 var _variant = {};
 function _tileXY(d) {
-    var type = ptypes[d.type_id];
+    var type = ptypes[d.type_id] || unknown;
     if (!type || type.layout == 'tile-1')
         return {'x': 0, 'y': 0};
     if (type.layout == 'alt-4') {
@@ -275,7 +408,7 @@ function _tileXY(d) {
          }
          return _variant[key];
     }
-    if (type.layout == 'anim-4')
+    if (type.layout.indexOf('anim') == 0)
         return {'x': frame, 'y': 0};
 
     // auto-16
@@ -295,37 +428,40 @@ function _tileXY(d) {
 
 function draw(pts) {
    pts.attr('x', function(d) {
-       var ox = noffset.attr('x');
-       return (-ox + o.w / 2 + d.x) * renderSize;
+       // var ox = noffset.attr('x');
+       // return (-ox + o.w / 2 + d.x) * renderSize;
+       return d.x * tileSize;
    });
    pts.attr('y', function(d) {
-       var oy = noffset.attr('y');
-       return (-oy + o.h / 2 + d.y) * renderSize;
+       // var oy = noffset.attr('y');
+       // return (-oy + o.h / 2 + d.y) * renderSize;
+       return d.y * tileSize;
    });
    pts.attr('tile-x', function(d) {
-       return _tileXY(d).x * tileSize;
+       return d.tileOffset.x * tileSize;
    });
    pts.attr('tile-y', function(d) {
-       return _tileXY(d).y * tileSize;
+       return d.tileOffset.y * tileSize;
    });
    pts.each(function(d) {
        var node = d3.select(this);
-       var ptype = ptypes[d.type_id];
-       if (!ptype || !ptype.image) {
-           image = unknown;
-       } else {
-           image = ptype.image;
-       }
-       context.drawImage(
-           image,
+       var ptype = ptypes[d.type_id] || unknown;
+       var buffer = _getBuffer(d.x, d.y);
+       var x = node.attr('x') - (buffer.x * tileSize * bufferScale);
+       var y = node.attr('y') - (buffer.y * tileSize * bufferScale);
+       buffer.context.clearRect(
+           x, y, tileSize, tileSize
+       );
+       buffer.context.drawImage(
+           ptype.image,
            node.attr('tile-x'),
            node.attr('tile-y'),
            tileSize,
            tileSize,
-           node.attr('x'),
-           node.attr('y'),
-           renderSize,
-           renderSize
+           x,
+           y,
+           tileSize,
+           tileSize
        );
    });
 }
