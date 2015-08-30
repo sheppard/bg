@@ -1,7 +1,8 @@
-require(["d3", "wq/store", "wq/model"], function(d3, ds, model) {
+require(["d3", "wq/store", "wq/model", "wq/outbox"], function(d3, ds, model, outbox) {
 ds.init({'service': ''});
+outbox.init();
 var ptypes;
-model('/pointtypes').load().then(function(data) {
+model('/pointtypes').prefetch().then(function(data) {
     ptypes = {};
     data.list.forEach(function(ptype) {
         ptype.image = new Image();
@@ -124,13 +125,8 @@ canvas.on('touchmove', function(evt) {
         'y': touchInfo.offset.y - (ty / renderSize)
     });
 });
-canvas.on('click', function() {
-    var evt = d3.event;
-    nav({
-        'x': Math.round(evt.x / renderSize + o.x) - (o.w / 2),
-        'y': Math.round(evt.y / renderSize + o.y) - (o.h / 2)
-   }, true);
-});
+canvas.on('click', click);
+
 var context = canvas.node().getContext('2d');
 var buffers = {};
 
@@ -270,7 +266,7 @@ function render() {
         .data(current, function(d){
             return (
                 d.x + '/' + d.y +
-                d.type_id + '/' +
+                d.type_id + '/' + d.clear + '/' +
                 d.tileOffset.x + '/' + d.tileOffset.y
             );
         });
@@ -463,6 +459,12 @@ function draw(pts) {
            tileSize,
            tileSize
        );
+       if (d.clear) {
+           buffer.context.fillStyle = d.clear;
+           buffer.context.fillRect(
+               x, y, tileSize, tileSize
+           );
+       }
    });
 }
 
@@ -470,45 +472,53 @@ function check(pt, ox, oy) {
    return _getTile(pt.x + ox, pt.y + oy).clear == pcolor;
 }
 
-function click(d) {
-   nav(d);
-   if (!d.type_id || d.type_id == 'p' || d.clear == pcolor)
-      return;
-   var type = ptypes.find(d.type_id);
-   var c1 = check(d, -1, 0)
-       c2 = check(d,  1, 0)
-       c3 = check(d, 0, -1)
-       c4 = check(d, 0,  1)
-   if (!c1 && !c2 && !c3 && !c4) {
-       if (jumps == 0)
-          return;
-       jumps--;
-       d3.select('#jumps').text(jumps)
-   }
-   d.pending = true;
-   if (d.type_id == 'j')
-      jumps++;
-   score += type.value;
-   d.type_id = 'c';
-   d.clear = pcolor;
-   render2();
+function click() {
+    var coords = d3.mouse(this);
+    var x = Math.round(coords[0] / renderSize + o.x - 0.5) - (o.w / 2);
+    var y = Math.round(coords[1] / renderSize + o.y - 0.5) - (o.h / 2);
+    var dx = x - o.x;
+    var dy = y - o.y;
+    if (dx > (o.w / 2 - 2) || dx < (-o.w / 2 + 1) ||
+        dy > (o.h / 2 - 2) || dy < (-o.h / 2 + 1)) {
+        nav({'x': x, 'y': y}, true);
+        return;
+    }
 
-   ds.save({
-       'url': 'points/' + d.id,
-       'method': 'PUT',
-       'x': d.x,
-       'y': d.y,
-       'type': d.type_id,
-       'clear': pcolor,
-       'csrfmiddlewaretoken': ds.get('csrftoken'),
-       'csrftoken': ds.get('csrftoken')
-   }, undefined, function(item, result){
-       if (item.saved) {
-           result.last_version = result.version;
-           grid[result.x][result.y] = result;
-           render2();
-       }
-   });
+    var d = _getTile(x, y);
+    if (!d.type_id || d.type_id == 'p' || d.clear == pcolor || !ptypes[d.type_id])
+        return;
+    var c1 = check(d, -1, 0)
+        c2 = check(d,  1, 0)
+        c3 = check(d, 0, -1)
+        c4 = check(d, 0,  1)
+    if (!c1 && !c2 && !c3 && !c4) {
+        if (jumps == 0)
+            return;
+        jumps--;
+        d3.select('#jumps').text(jumps)
+    }
+    d.pending = true;
+    if (d.type_id == 'j')
+        jumps++;
+    score += ptypes[d.type_id].value || 0;
+    d.type_id = 'c';
+    d.clear = pcolor;
+    grid[x][y] = d;
+
+    outbox.save({
+        'x': d.x,
+        'y': d.y,
+        'type_id': d.type_id,
+        'clear': pcolor,
+    }, {
+        'url': 'points/' + d.id,
+        'method': 'PUT',
+    }).then(function(item) {
+        if (item.saved) {
+            result.last_version = result.version;
+            grid[result.x][result.y] = result;
+        }
+    });
 }
 
 });
