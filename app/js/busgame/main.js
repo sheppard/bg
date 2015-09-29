@@ -98,7 +98,7 @@ function nav(d, anim) {
 }
 
 var canvas = d3.select('body').append('canvas')
-   .style('position', 'absolute')
+   .style('position', 'fixed')
    .attr('width', swidth)
    .attr('height', sheight)
    .style('left', sleft)
@@ -133,7 +133,7 @@ var buffers = {};
 var mini = d3.select('body').append('canvas')
     .attr('width', count)
     .attr('height', count)
-    .attr('style', 'position:absolute;right:0;bottom:0;background-color:#333');
+    .attr('style', 'position:fixed;right:0;bottom:0;background-color:#333');
 var minicontext = mini.node().getContext('2d');
 var minipixel = minicontext.createImageData(1, 1);
 
