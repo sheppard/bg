@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Point Types</title>
+    {{>head}}
+  </head>
+  <body>
+    <div data-role="page" class="ui-page" data-wq-sync-refresh="true">
+      <div data-role="header">
+        {{>home}}
+        <h1>Point Types</h1>
+      </div>
+      <div role="main" class="ui-content">
+        <ul data-role="listview" data-filter="true" data-inset="true">
+        {{#list}}
+        <li><a href="/pointtypes/{{id}}">
+          <h3>{{label}}</h3>
+        </a></li>
+        {{/list}}
+        {{^list}}
+        <li>No Examples Found</li>
+        {{/list}}
+        {{#unsynced}}
+        <li data-role="list-divider">Outbox</li>
+        {{#unsyncedItems}}
+        <li data-icon="{{#error}}alert{{/error}}{{^error}}refresh{{/error}}">
+          <a href="/outbox/{{id}}/edit">{{data.name}}</a>
+        </li>
+        {{/unsyncedItems}}
+        {{/unsynced}}
+        <li data-icon="plus" data-theme="b">
+          <a href="/pointtypes/new">Add Point Type</a>
+        </li>
+      </div>
+    </div>
+  </body>
+</html>
+

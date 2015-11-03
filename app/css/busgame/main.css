@@ -1,0 +1,31 @@
+#play {
+    margin: 0;
+    background-color: black;
+    overflow:hidden;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.score {
+    color: white;
+    position: fixed;
+    z-index: 1000;
+    right: 10px;
+    font-weight: bold;
+    font-size:1.5em;
+    font-family: "courier", fixed;
+}
+.score.big {
+    font-size: 2em;
+    font-family: verdana, sans-serif;
+}
+
+.draw {
+    background-image: url('/images/transparent.png');
+}
+.draw img {
+    display: none;
+}

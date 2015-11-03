@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{label}}</title>
+    {{>head}}
+  </head>
+  <body>
+    <div data-role="page" class="ui-page">
+      <div data-role="header">
+        {{>home}}
+        <h1>{{label}}</h1>
+        <a href="/pointtypes/{{id}}/edit" data-icon="edit" data-transition="flip">
+          Edit
+        </a>
+      </div>
+      <div role="main" class="ui-content">
+        <h1>{{label}}</h1>
+        <table>
+          <tr><th>Name</th><td>{{name}}</td></tr>
+          <tr><th>Layout Class</th><td>{{layout_label}}</td></tr>
+        </table>
+        <img src="{{path}}">
+      </div>
+    </div>
+  </body>
+</html>
+

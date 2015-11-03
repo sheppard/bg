@@ -13,3 +13,6 @@ rest.router.register_model(
     PointType,
     lookup='code',
 )
+
+rest.router.add_page('index', {'url': ''})
+rest.router.add_page('play', {})

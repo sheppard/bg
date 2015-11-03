@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{#id}}Edit{{/id}}{{^id}}Add{{/id}} </title>
+    {{>head}}
+  </head>
+  <body>
+    <div data-role="page" class="ui-page">
+      <div data-role="header">
+        {{>home}}
+        <h1>{{#id}}Edit{{/id}}{{^id}}Add{{/id}} Example</h1>
+      </div>
+      <div role="main" class="ui-content">
+        <form action="/pointtypes/{{id}}" method="post" data-ajax="false"
+            data-wq-json="true"{{#outbox_id}} data-wq-outbox-id="{{outbox_id}}"{{/outbox_id}}>
+          {{>csrf}}
+          {{#id}}
+          <input type=hidden name="_method" value="PUT">
+          {{/id}}
+          <ul data-role="listview">
+            <li>
+              <label for="code">Code</label>
+              <input name="code" id="code" value="{{code}}">
+              <p class="error pointtype-code-errors"></p>
+            </li>
+            <li>
+              <label for="name">Name</label>
+              <input name="name" id="name" value="{{name}}">
+              <p class="error pointtype-name-errors"></p>
+            </li>
+            <li>
+              <label for="layout">Layout Class</label>
+              <select id="layout" name="layout">
+                <option value="">Select one...</option>
+                {{#layout_choices}}
+                <option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>
+                {{/layout_choices}}
+              </select>
+              <p class="error pointtype-layout-errors"></p>
+            </li>
+            <li>
+              <label for="value">Score</label>
+              <input name="value" id="value" type="tel" value="{{value}}">
+              <p class="error pointtype-value-errors"></p>
+            </li>
+            <li>
+              <input type="hidden" data-wq-type="file" name="path">
+              {{#path.name}}
+              <img src="{{image_url}}">
+              {{/path.name}}
+              {{^path.name}}
+              <div class="draw">
+                <img src="{{path}}">
+              </div>
+              {{/path.name}}
+              <p class="error pointtype-path-errors"></p>
+            </li>
+            <li>
+              <div class="ui-grid-a">
+                <div class="ui-block-a">
+                  <a href="/pointtypes/{{id}}" data-role="button" data-icon="back" data-direction="reverse">
+                    Back
+                  </a>
+                </div>
+                <div class="ui-block-b">
+                  <button type="submit" data-icon="check" data-theme="b">
+                    Submit
+                  </a>
+                </div>
+              </div>
+              <p class="error pointtype-errors"></p>
+            </li>
+          </ul>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
+

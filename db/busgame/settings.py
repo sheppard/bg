@@ -56,7 +56,11 @@ from wq.db.default_settings import (
     DEFAULT_AUTH_GROUP,
     DISAMBIGUATE
 )
-ANONYMOUS_PERMISSIONS = ("grid.change_point", "game.add_player")
+ANONYMOUS_PERMISSIONS = (
+    "grid.change_point",
+    "grid.change_pointtype",
+    "game.add_player"
+)
 
 # wq: Social auth (see http://psa.matiasaguirre.net/docs/backends/)
 AUTHENTICATION_BACKENDS = (
