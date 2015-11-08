@@ -27,6 +27,7 @@ ALLOWED_HOSTS = ["busgame"]
 
 INSTALLED_APPS = (
     'rest_framework',
+    'django.contrib.contenttypes',
     'wq.db.rest',
     'grid',
     'game',
@@ -58,7 +59,10 @@ from wq.db.default_settings import (
 )
 ANONYMOUS_PERMISSIONS = (
     "grid.change_point",
+    "grid.add_pointtype",
     "grid.change_pointtype",
+    "grid.add_theme",
+    "grid.change_theme",
     "game.add_player"
 )
 

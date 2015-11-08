@@ -2,6 +2,17 @@ from django.db import models
 from wq.db.patterns.base.models import NaturalKeyModel
 from django.core.cache import cache
 
+class Theme(models.Model):
+    name = models.CharField(max_length=40)
+    primary1 = models.CharField(max_length=7)
+    primary2 = models.CharField(max_length=7)
+    primary3 = models.CharField(max_length=7)
+    secondary1 = models.CharField(max_length=7)
+    secondary2 = models.CharField(max_length=7)
+
+    def __str__(self):
+        return self.name
+
 class PointType(NaturalKeyModel):
     LAYOUT_CHOICES = [
         ('tile-1', 'Single Tile'),
@@ -15,6 +26,7 @@ class PointType(NaturalKeyModel):
     value = models.IntegerField(default=0)
     path = models.FileField(upload_to="sprites")
     layout = models.CharField(max_length=10, choices=LAYOUT_CHOICES)
+    theme = models.ForeignKey(Theme, null=True, blank=True)
 
     def __str__(self):
         return self.name

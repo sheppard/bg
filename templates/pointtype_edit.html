@@ -39,9 +39,44 @@
               <p class="error pointtype-layout-errors"></p>
             </li>
             <li>
+              <label for="theme_id">Theme</label>
+              <select id="theme_id" name="theme_id">
+                <option value="">Select one...</option>
+                {{#theme_list}}
+                <option value="{{id}}"{{#selected}} selected{{/selected}}>{{label}}</option>
+                {{/theme_list}}
+              </select>
+              <p class="error pointtype-theme-errors"></p>
+            </li>
+            <li>
               <label for="value">Score</label>
               <input name="value" id="value" type="tel" value="{{value}}">
               <p class="error pointtype-value-errors"></p>
+            </li>
+            {{^id}}
+            <li>
+              <label for="path">File</label>
+              <input name="path" id="path" type="file">
+              <p class="error pointtype-path-errors"></p>
+            </li>
+            {{/id}}
+            {{#id}}
+            <li>
+              <input
+                 data-role="none"
+                 id="current-color"
+                 type="color"
+                 style="padding:0px;margin-right:1em;border:1px solid black;width:50px;height:48px;float:left;"
+              >
+              {{#theme}}
+                {{>theme_primary}}
+                {{>theme_secondary}}
+                <br>
+              {{/theme}}
+              <span class="theme-square" style="background-color:black"></span>
+              <span class="theme-square" style="background-color:white"></span>
+              <span class="theme-square" style="background-color:transparent"></span>
+              <button type="button" data-iconpos="notext" data-icon="search" id="pick-color" data-inline="true">Pick</button>
             </li>
             <li>
               <input type="hidden" data-wq-type="file" name="path">
@@ -55,6 +90,10 @@
               {{/path.name}}
               <p class="error pointtype-path-errors"></p>
             </li>
+            <li>
+              <button type="button" id="mirror-ltr" data-icon="arrow-r" data-iconpos="notext" data-inline="true"></button>
+            <li>
+            {{/id}}
             <li>
               <div class="ui-grid-a">
                 <div class="ui-block-a">

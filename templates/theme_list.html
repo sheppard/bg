@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Themes</title>
+    {{>head}}
+  </head>
+  <body>
+    <div data-role="page" class="ui-page" data-wq-sync-refresh="true">
+      <div data-role="header">
+        {{>home}}
+        <h1>Themes</h1>
+      </div>
+      <div role="main" class="ui-content">
+        <ul data-role="listview" data-filter="true" data-inset="true">
+        {{#list}}
+        <li><a href="/themes/{{id}}">
+          <h3>{{label}}</h3>
+          <p>
+            {{>theme_primary}}
+            {{>theme_secondary}}
+          </p>
+        </a></li>
+        {{/list}}
+        {{^list}}
+        <li>No Examples Found</li>
+        {{/list}}
+        {{#unsynced}}
+        <li data-role="list-divider">Outbox</li>
+        {{#unsyncedItems}}
+        <li data-icon="{{#error}}alert{{/error}}{{^error}}refresh{{/error}}">
+          <a href="/outbox/{{id}}/edit">
+            {{#data}}
+            {{name}}
+            <p>
+              {{>theme_primary}}
+              {{>theme_secondary}}
+            </p>
+            {{/data}}
+          </a>
+        </li>
+        {{/unsyncedItems}}
+        {{/unsynced}}
+        <li data-icon="plus" data-theme="b">
+          <a href="/themes/new">Add Theme</a>
+        </li>
+      </div>
+    </div>
+  </body>
+</html>
+

@@ -25,7 +25,14 @@
 
 .draw {
     background-image: url('/images/transparent.png');
+    overflow-x: scroll;
 }
 .draw img {
     display: none;
+}
+.theme-square {
+    border: 1px solid black;
+    display: inline-block;
+    width: 16px;
+    height: 16px;
 }

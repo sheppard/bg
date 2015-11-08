@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{#id}}Edit{{/id}}{{^id}}Add{{/id}} Theme</title>
+    {{>head}}
+  </head>
+  <body>
+    <div data-role="page" class="ui-page">
+      <div data-role="header">
+        {{>home}}
+        <h1>{{#id}}Edit{{/id}}{{^id}}Add{{/id}} Theme</h1>
+      </div>
+      <div role="main" class="ui-content">
+        <form action="/themes/{{id}}" method="post" data-ajax="false"
+            data-wq-json="true"{{#outbox_id}} data-wq-outbox-id="{{outbox_id}}"{{/outbox_id}}>
+          {{>csrf}}
+          {{#id}}
+          <input type=hidden name="_method" value="PUT">
+          {{/id}}
+          <ul data-role="listview">
+            <li>
+              <label for="name">Name</label>
+              <input name="name" id="name" value="{{name}}">
+              <p class="error theme-name-errors"></p>
+            </li>
+            <li data-role="list-divider">Primary</li>
+            <li>
+              <div class="ui-grid-b">
+                <div class="ui-block-a">
+                  <label for="primary1">Shadow</label>
+                  <input type="color" name="primary1" id="primary1" value="{{primary1}}">
+                  <p class="error theme-primary1-errors"></p>
+                </div>
+                <div class="ui-block-b">
+                  <label for="primary2">Main</label>
+                  <input type="color" name="primary2" id="primary2" value="{{primary2}}">
+                  <p class="error theme-primary2-errors"></p>
+                </div>
+                <div class="ui-block-c">
+                  <label for="primary3">Highlight</label>
+                  <input type="color" name="primary3" id="primary3" value="{{primary3}}">
+                  <p class="error theme-primary3-errors"></p>
+                </div>
+              </div>
+            </li>
+            <li data-role="list-divider">Secondary</li>
+            <li>
+              <div class="ui-grid-a">
+                <div class="ui-block-a">
+                  <label for="secondary1">Accent 1</label>
+                  <input type="color" name="secondary1" id="secondary1" value="{{secondary1}}">
+                  <p class="error theme-secondary1-errors"></p>
+                </div>
+                <div class="ui-block-b">
+                  <label for="secondary2">Accent 2</label>
+                  <input type="color" name="secondary2" id="secondary2" value="{{secondary2}}">
+                  <p class="error theme-secondary2-errors"></p>
+                </div>
+              </div>
+            </li>
+            <li>
+              <div class="ui-grid-a">
+                <div class="ui-block-a">
+                  <a href="/themes/{{id}}" data-role="button" data-icon="back" data-direction="reverse">
+                    Back
+                  </a>
+                </div>
+                <div class="ui-block-b">
+                  <button type="submit" data-icon="check" data-theme="b">
+                    Submit
+                  </a>
+                </div>
+              </div>
+              <p class="error theme-errors"></p>
+            </li>
+          </ul>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
+
