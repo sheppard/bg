@@ -18,8 +18,22 @@
         <table>
           <tr><th>Name</th><td>{{name}}</td></tr>
           <tr><th>Layout Class</th><td>{{layout_label}}</td></tr>
+          {{#theme}}
+          <tr><th>Theme</th><td>{{theme_label}}</td></tr>
+          {{/theme}}
         </table>
-        <img src="{{path}}">
+        <img src="/media/{{path}}">
+        {{#theme}}
+        <div data-role="collapsible">
+          <h3>Alternate Themes</h3>
+        {{#themes}}
+          <div style="float:left;margin:1em;text-align:center">
+            <h4>{{label}}</h4>
+            <img src="/media/{{id}}/{{path}}">
+          </div>
+        {{/themes}}
+          <div style="clear:both;"></div>
+        {{/theme}}
       </div>
     </div>
   </body>

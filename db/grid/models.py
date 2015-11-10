@@ -1,6 +1,7 @@
 from django.db import models
 from wq.db.patterns.base.models import NaturalKeyModel
 from django.core.cache import cache
+from matplotlib.colors import hex2color
 
 class Theme(models.Model):
     name = models.CharField(max_length=40)
@@ -12,6 +13,20 @@ class Theme(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def colors_int(self):
+        def hex_to_rgba(color):
+            rgb = hex2color(color)
+            return tuple(int(c * 255) for c in rgb + (1,))
+
+        return list(map(hex_to_rgba, [
+            self.primary1,
+            self.primary2,
+            self.primary3,
+            self.secondary1,
+            self.secondary2,
+        ]))
 
 class Layout(models.Model):
     code = models.SlugField()

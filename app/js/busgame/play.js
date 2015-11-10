@@ -16,7 +16,7 @@ app.models.pointtype.prefetch().then(function(data) {
     ptypes = {};
     data.list.forEach(function(ptype) {
         ptype.image = new Image();
-        ptype.image.src = ptype.path;
+        ptype.image.src = '/media/' + ptype.path;
         ptypes[ptype.id] = ptype;
     });
 });

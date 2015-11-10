@@ -49,7 +49,11 @@ from wq.db.default_settings import (
     REST_FRAMEWORK,
     SOCIAL_AUTH_PIPELINE,
 )
+REST_FRAMEWORK['UPLOADED_FILES_USE_URL'] = False
 
+TEMPLATE_CONTEXT_PROCESSORS += (
+    'grid.context_processors.themes',
+)
 # wq: Recommended settings unique to wq.db
 from wq.db.default_settings import (
     ANONYMOUS_PERMISSIONS,
