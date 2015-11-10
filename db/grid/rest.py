@@ -1,6 +1,7 @@
 from wq.db import rest
-from .models import Point, PointType, Theme
+from .models import Point, PointType, Theme, Layout
 from .views import PointViewSet
+from .serializers import LayoutSerializer
 
 
 rest.router.register_model(
@@ -15,6 +16,11 @@ rest.router.register_model(
 )
 
 rest.router.register_model(Theme)
+rest.router.register_model(
+    Layout,
+    serializer=LayoutSerializer,
+    lookup='code'
+)
 
 rest.router.add_page('index', {'url': ''})
 rest.router.add_page('play', {})

@@ -29,12 +29,12 @@
               <p class="error pointtype-name-errors"></p>
             </li>
             <li>
-              <label for="layout">Layout Class</label>
-              <select id="layout" name="layout">
+              <label for="layout_id">Layout Class</label>
+              <select id="layout_id" name="layout_id">
                 <option value="">Select one...</option>
-                {{#layout_choices}}
-                <option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>
-                {{/layout_choices}}
+                {{#layout_list}}
+                <option value="{{id}}"{{#selected}} selected{{/selected}}>{{label}}</option>
+                {{/layout_list}}
               </select>
               <p class="error pointtype-layout-errors"></p>
             </li>
@@ -61,6 +61,29 @@
             </li>
             {{/id}}
             {{#id}}
+            {{#layout}}
+            {{#has_variants}}
+            <li>
+              {{#has_transform_variants}}
+              <p>
+              <button type="button" data-mini="true" data-inline="true"
+              onclick="$(this).parents('li').find('input, label').show();">Show All</button>
+              </p>
+              {{/has_transform_variants}}
+              <fieldset data-role="controlgroup" data-type="horizontal">
+                <legend>Variant</legend>
+                {{#variants}}
+                <label for="variant-{{code}}"
+                  {{#transform_type}}style="display:none;"{{/transform_type}}>{{code}}</label>
+                <input type="radio" id="variant-{{code}}" name="variant"
+                  {{#transform_type}}style="display:none;"{{/transform_type}}
+                  value="{{code}}"
+                  {{^@index}}checked{{/@index}}>
+                {{/variants}}
+              </fieldset>
+            </li>
+            {{/has_variants}}
+            {{/layout}}
             <li>
               <input
                  data-role="none"

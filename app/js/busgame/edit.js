@@ -70,33 +70,37 @@ function updateColor() {
 }
 
 app.models.pointtype.find(id).then(function(pointtype) {
+app.models.layout.find(pointtype.layout_id).then(function(layout) {
 
-var layouts = {
-    'tile-1': [1, 1],
-    'alt-4': [2, 2],
-    'anim-4': [4, 1],
-    'auto-16': [4, 4]
-};
-
-var layout = layouts[pointtype.layout];
+var lwidth = 1;
+var lheight = 1;
+var variant = layout.variants[0];
+layout.variants.forEach(function(v) {
+    if (v.x + 1 > lwidth) {
+        lwidth = v.x + 1;
+    }
+    if (v.y + 1 > lheight) {
+        lheight = v.y + 1;
+    }
+});
 var cw = document.body.clientWidth;
 var ch = document.body.clientHeight;
 var tileSize = 32;
-var gridSize = Math.floor((cw < ch ? cw : ch) / (tileSize + 2));
+var gridSize = Math.floor((cw < ch ? cw : ch) / tileSize);
 if (gridSize < 16) {
     gridSize = 16;
 }
 
 var renderSize = tileSize * gridSize;
-var imgWidth = layout[0] * tileSize;
-var imgHeight = layout[1] * tileSize;
+var imgWidth = lwidth * tileSize;
+var imgHeight = lheight * tileSize;
 
 var canvas = d3.select('.draw').append('canvas')
-   .attr('width', renderSize + (gridSize * 2))
-   .attr('height', renderSize + (gridSize * 2));
+   .attr('width', renderSize)
+   .attr('height', renderSize);
 
+/*
 var touchInfo = {};
-
 canvas.on('touchstart', function(evt) {
     var touches = d3.touches(this);
     touchInfo.start = {
@@ -114,6 +118,8 @@ canvas.on('touchmove', function(evt) {
     var ty = touches[0][1] - touchInfo.start.y;
     console.log("touchmove", tx, ty);
 });
+*/
+
 canvas.on('click', click);
 
 var context = canvas.node().getContext('2d');
@@ -124,6 +130,11 @@ var image = document.createElement('canvas')
 image.width = imgWidth;
 image.height = imgHeight;
 var imageContext = image.getContext('2d');
+var scratch = document.createElement('canvas')
+$(scratch).appendTo($page);
+scratch.width = tileSize;
+scratch.height = tileSize;
+var scratchContext = scratch.getContext('2d');
 var img = d3.select('.draw img').node();
 initImage();
 update();
@@ -136,19 +147,19 @@ update();
 
 function update() {
     context.clearRect(
-        gridSize,
-        gridSize,
+        0,
+        0,
         renderSize,
         renderSize
     )
     context.drawImage(
         image,
-        0,
-        0,
+        variant.x * tileSize,
+        variant.y * tileSize,
         tileSize,
         tileSize,
-        gridSize,
-        gridSize,
+        0,
+        0,
         renderSize,
         renderSize
     );
@@ -165,6 +176,46 @@ function update() {
         });
     });
 }
+
+function copyVariant(v) {
+    scratchContext.save();
+    scratchContext.clearRect(0, 0, tileSize, tileSize);
+    scratchContext.translate(tileSize / 2, tileSize / 2);
+    var angle = 0;
+    if (v.transform_type == '90') {
+        angle = Math.PI / 2;
+    } else if (v.transform_type == '180') {
+        angle = Math.PI;
+    } else if (v.transform_type == '270') {
+        angle = 3 * Math.PI / 2;
+    }
+    scratchContext.rotate(angle);
+    scratchContext.translate(-tileSize / 2, -tileSize / 2);
+    scratchContext.drawImage(
+        image,
+        variant.x * tileSize,
+        variant.y * tileSize,
+        tileSize,
+        tileSize,
+        0,
+        0,
+        tileSize,
+        tileSize
+    );
+    scratchContext.restore();
+    imageContext.drawImage(
+        scratch,
+        0,
+        0,
+        tileSize,
+        tileSize,
+        v.x * tileSize,
+        v.y * tileSize,
+        tileSize,
+        tileSize
+    );
+}
+
 $page.find('button#mirror-ltr').click(function() {
     imageContext.save();
     imageContext.scale(-1, 1);
@@ -176,6 +227,16 @@ $page.find('button#mirror-ltr').click(function() {
     imageContext.restore();
     update();
 });
+var $variant = $page.find('input[name=variant]')
+$variant.click(function() {
+    var vcode = $variant.filter(':checked').val();
+    layout.variants.forEach(function(v) {
+        if (v.code == vcode) {
+            variant = v;
+        }
+    });
+    update();
+});
 
 function initImage() {
     imageContext.drawImage(img, 0, 0);
@@ -183,8 +244,8 @@ function initImage() {
 
 function click() {
     var coords = d3.mouse(this);
-    var x = Math.round(coords[0] / gridSize - 1.5);
-    var y = Math.round(coords[1] / gridSize - 1.5);
+    var x = Math.round(coords[0] / gridSize - 0.5) + (variant.x * tileSize);
+    var y = Math.round(coords[1] / gridSize - 0.5) + (variant.y * tileSize);
     var p;
     if (!write) {
         p = imageContext.getImageData(x, y, 1, 1).data;
@@ -203,9 +264,15 @@ function click() {
     p[2] = blue;
     p[3] = alpha;
     imageContext.putImageData(pixel, x, y);
+    layout.variants.forEach(function(v) {
+        if (v.transform_source_id == variant.id) {
+            copyVariant(v); 
+        }
+    });
     update();
 }
 
+});
 });
 
 }

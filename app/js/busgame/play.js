@@ -21,7 +21,7 @@ app.models.pointtype.prefetch().then(function(data) {
     });
 });
 var unknown = {
-    'layout': 'anim-4',
+    'layout_id': 'anim-4',
     'image': new Image()
 };
 unknown.image.src = '/images/spin.png';
@@ -173,7 +173,7 @@ function hcolor(d) {
     return '#eef';
 }
 
-setInterval(anim, 100);
+setInterval(anim, 150);
 var frame = 0;
 function anim() {
     frame++;
@@ -406,9 +406,9 @@ function _getBuffers(viewport) {
 var _variant = {};
 function _tileXY(d) {
     var type = ptypes[d.type_id] || unknown;
-    if (!type || type.layout == 'tile-1')
+    if (!type || type.layout_id == 'tile-1')
         return {'x': 0, 'y': 0};
-    if (type.layout == 'alt-4') {
+    if (type.layout_id == 'alt-4') {
         var key = d.x + ',' + d.y;
         if (!_variant[key]) {
             var dx = Math.random() < 0.5 ? 0 : 1;
@@ -417,7 +417,7 @@ function _tileXY(d) {
          }
          return _variant[key];
     }
-    if (type.layout.indexOf('anim') == 0)
+    if (type.layout_id.indexOf('anim') == 0)
         return {'x': frame, 'y': 0};
 
     // auto-16

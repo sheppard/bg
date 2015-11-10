@@ -13,6 +13,29 @@ class Theme(models.Model):
     def __str__(self):
         return self.name
 
+class Layout(models.Model):
+    code = models.SlugField()
+    name = models.CharField(max_length=40)
+
+    def __str__(self):
+        return self.name
+
+class Variant(models.Model):
+    TRANSFORM_TYPE_CHOICES = [
+        ('90', 'Clockwise Quarter Turn'),
+        ('180', 'Half Turn'),
+        ('270', 'Conter-Clockwise Quarter Turn'),
+    ]
+    code = models.CharField(max_length=1)
+    layout = models.ForeignKey(Layout, related_name='variants')
+    x = models.IntegerField()
+    y = models.IntegerField()
+
+    transform_source = models.ForeignKey('self', null=True, blank=True)
+    transform_type = models.CharField(
+        max_length=5, choices=TRANSFORM_TYPE_CHOICES, null=True, blank=True,
+    )
+
 class PointType(NaturalKeyModel):
     LAYOUT_CHOICES = [
         ('tile-1', 'Single Tile'),
@@ -25,7 +48,7 @@ class PointType(NaturalKeyModel):
     name = models.CharField(max_length=255)
     value = models.IntegerField(default=0)
     path = models.FileField(upload_to="sprites")
-    layout = models.CharField(max_length=10, choices=LAYOUT_CHOICES)
+    layout = models.ForeignKey(Layout, null=True, blank=True)
     theme = models.ForeignKey(Theme, null=True, blank=True)
 
     def __str__(self):
