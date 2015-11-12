@@ -3,13 +3,13 @@ return {
     'name': 'play',
     'init': function(){},
     'run': function(page) {
-        if (page == 'play') {
-            play()
+        if (page == 'play' || page == 'edit') {
+            play(page == 'edit')
         }
     }
 };
 
-function play() {
+function play(edit) {
 
 var ptypes;
 app.models.pointtype.prefetch().then(function(data) {
@@ -18,7 +18,21 @@ app.models.pointtype.prefetch().then(function(data) {
         ptype.image = new Image();
         ptype.image.src = '/media/' + ptype.path;
         ptypes[ptype.id] = ptype;
+        if (ptype.theme_id) {
+            ptype.themes = {};
+            themes.forEach(function(theme) {
+                var timg = new Image();
+                ptype.themes[theme.id] = timg;
+                timg.src = '/media/' + theme.id + '/' + ptype.path;
+            });
+        }
     });
+});
+var themes;
+var ptheme;
+app.models.theme.load().then(function(data) {
+    themes = data.list;
+    ptheme = themes[Math.floor(Math.random()*themes.length)];
 });
 var unknown = {
     'layout_id': 'anim-4',
@@ -26,23 +40,12 @@ var unknown = {
 };
 unknown.image.src = '/images/spin.png';
 
-var pcolors = ['#99f', '#f9f', '#9ff', '#f99', '#ff9', '#9f9'];
-var pcolor = pcolors[Math.floor(Math.random()*pcolors.length)];
 var layouts = {
     'tile-1': [1, 1],
     'alt-4': [2, 2],
     'anim-4': [4, 1],
     'auto-16': [4, 4]
 };
-
-/*var player = {};
-ds.save({
-  'url': 'players',
-  'method': 'POST',
-  'color': pcolor
-}, undefined, function(p){
-    player.info = p;
-}); */
 
 var jumps = 1;
 var score = 0;
@@ -55,6 +58,9 @@ var bounds = {
     'w': document.body.clientWidth,
     'h': document.body.clientHeight
 };
+if (edit) {
+    bounds.h -= 40;
+}
 var length = bounds.w > bounds.h ? bounds.w : bounds.h;
 while(length / renderSize > 16) {
     renderSize += tileSize / 2;
@@ -71,6 +77,9 @@ var swidth = renderSize * o.w;
 var sleft = (bounds.w - swidth) / 2;
 var sheight = renderSize * o.h;
 var stop = (bounds.h - sheight) / 2;
+if (edit) {
+    stop += 40;
+}
 var grid = {};
 
 
@@ -157,21 +166,6 @@ var noffset = d3.select(document.createElement('custom-elem-offset'));
 noffset.attr('x', o.x);
 noffset.attr('y', o.y);
 o.b = 1;
-
-var colors = [];
-function color(d) {
-  if (d.pending)
-    return '#f90';
-  if (d.clear)
-    return d.clear;
-  return 'transparent';
-}
-function hcolor(d) {
-  if (d.clear)
-    return 'transparent';
-  else
-    return '#eef';
-}
 
 setInterval(anim, 150);
 var frame = 0;
@@ -279,7 +273,7 @@ function render() {
         .data(current, function(d){
             return (
                 d.x + '/' + d.y +
-                d.type_id + '/' + d.clear + '/' +
+                d.type_id + '/' + d.theme_id + '/' +
                 d.tileOffset.x + '/' + d.tileOffset.y
             );
         });
@@ -290,15 +284,6 @@ function render() {
     d3.select('#score').text(score);
     d3.select('#loc').text(Math.round(o.x, 1) + ',' + Math.round(o.y, 1));
 }
-
-/*
-g.on('mouseover', function() {
-//   d3.select(this).selectAll('rect').attr('fill', hcolor)
-});
-g.on('mouseout', function() {
-//   d3.select(this).selectAll('rect').attr('fill', color);
-});
-*/
 
 setInterval(_minimap, 1000);
 function _minimap() {
@@ -315,8 +300,15 @@ function _minimap() {
         .attr('y', function(d) { return d.y });
 
     r.attr('fill', function(d) {
-        if (d.clear)
-            return d.clear;
+        if (d.theme_id) {
+            var tcolor;
+            themes.forEach(function(theme) {
+                if (d.theme_id == theme.id) {
+                    tcolor = theme.primary2;
+                }
+            });
+            return tcolor;
+        }
         if (d.type_id == 'p')
             return '#999';
         return '#fff';
@@ -332,6 +324,9 @@ function _minimap() {
         var node = d3.select(this);
         var p = minipixel.data;
         var fill = node.attr('fill');
+        if (fill.length == 7) {
+            fill = '#' + fill.charAt(1) + fill.charAt(3) + fill.charAt(5);
+        }
         var opacity = node.attr('opacity');
         var x = node.attr('x');
         var y = node.attr('y');
@@ -458,11 +453,17 @@ function draw(pts) {
        var buffer = _getBuffer(d.x, d.y);
        var x = node.attr('x') - (buffer.x * tileSize * bufferScale);
        var y = node.attr('y') - (buffer.y * tileSize * bufferScale);
+       var img;
        buffer.context.clearRect(
            x, y, tileSize, tileSize
        );
+       if (d.theme_id && ptype.themes) {
+           img = ptype.themes[d.theme_id];
+       } else {
+           img = ptype.image;
+       }
        buffer.context.drawImage(
-           ptype.image,
+           img,
            node.attr('tile-x'),
            node.attr('tile-y'),
            tileSize,
@@ -472,17 +473,11 @@ function draw(pts) {
            tileSize,
            tileSize
        );
-       if (d.clear) {
-           buffer.context.fillStyle = d.clear;
-           buffer.context.fillRect(
-               x, y, tileSize, tileSize
-           );
-       }
    });
 }
 
 function check(pt, ox, oy) {
-   return _getTile(pt.x + ox, pt.y + oy).clear == pcolor;
+   return _getTile(pt.x + ox, pt.y + oy).theme_id == ptheme.id;
 }
 
 function click() {
@@ -498,31 +493,38 @@ function click() {
     }
 
     var d = _getTile(x, y);
-    if (!d.type_id || d.type_id == 'p' || d.clear == pcolor || !ptypes[d.type_id])
-        return;
-    var c1 = check(d, -1, 0)
-        c2 = check(d,  1, 0)
-        c3 = check(d, 0, -1)
-        c4 = check(d, 0,  1)
-    if (!c1 && !c2 && !c3 && !c4) {
-        if (jumps == 0)
+    if (!edit) {
+        if (!d.type_id || d.type_id == 'p' || d.theme_id == ptheme.id || !ptypes[d.type_id])
             return;
-        jumps--;
-        d3.select('#jumps').text(jumps)
+        var c1 = check(d, -1, 0)
+            c2 = check(d,  1, 0)
+            c3 = check(d, 0, -1)
+            c4 = check(d, 0,  1)
+        if (!c1 && !c2 && !c3 && !c4) {
+            if (jumps == 0)
+                return;
+            jumps--;
+            d3.select('#jumps').text(jumps)
+        }
     }
     d.pending = true;
     if (d.type_id == 'j')
         jumps++;
     score += ptypes[d.type_id].value || 0;
-    d.type_id = 'c';
-    d.clear = pcolor;
+    if (edit) {
+        d.type_id = $('#pointtype').val();
+        d.theme_id = $('#theme').val();
+    } else {
+        d.type_id = 'i';
+        d.theme_id = ptheme.id;
+    }
     grid[x][y] = d;
 
     outbox.save({
         'x': d.x,
         'y': d.y,
         'type_id': d.type_id,
-        'clear': pcolor,
+        'theme_id': d.theme_id
     }, {
         'url': 'points/' + d.id,
         'method': 'PUT',

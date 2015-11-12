@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>EK&A's Bus Game</title>
+    {{>head}}
+  </head>
+  <body>
+    <div data-role='page' id="play">
+      <div class="ui-grid-a">
+        <div class="ui-block-a">
+          <select id="pointtype">
+            {{#pointtypes}}
+            <option value="{{id}}">{{label}}</option>
+            {{/pointtypes}}
+          </select>
+        </div>
+        <div class="ui-block-b">
+          <select id="theme">
+            <option value="">Default</option>
+            <option value="0">None</option>
+            {{#themes}}
+            <option value="{{id}}">{{label}}</option>
+            {{/themes}}
+          </select>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

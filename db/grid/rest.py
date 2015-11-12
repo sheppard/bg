@@ -24,3 +24,4 @@ rest.router.register_model(
 
 rest.router.add_page('index', {'url': ''})
 rest.router.add_page('play', {})
+rest.router.add_page('edit', {})

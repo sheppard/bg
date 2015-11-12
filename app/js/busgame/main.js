@@ -10,6 +10,10 @@ app.init(config)
    .then(app.models.theme.load)
    .then(function(themes) {
        tmpl.setDefault('themes', themes.list);
+   })
+   .then(app.models.pointtype.load)
+   .then(function(pointtypes) {
+       tmpl.setDefault('pointtypes', pointtypes.list);
    });
 
 });

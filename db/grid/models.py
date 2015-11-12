@@ -77,7 +77,7 @@ class Point(models.Model):
     x = models.IntegerField(db_index=True)
     y = models.IntegerField(db_index=True)
     type = models.ForeignKey(PointType)
-    clear = models.CharField(max_length=20, null=True, blank=True)
+    theme = models.ForeignKey(Theme, null=True, blank=True)
     version = models.IntegerField(db_index=True, null=True, blank=True)
 
     def save(self, *args, **kwargs):
