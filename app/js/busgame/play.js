@@ -44,8 +44,16 @@ var layouts = {
     'tile-1': [1, 1],
     'alt-4': [2, 2],
     'anim-4': [4, 1],
-    'auto-16': [4, 4]
+    'dir-4': [1, 4],
+    'auto-16': [4, 4],
+    'diranim-16': [4, 4]
 };
+var dirIndex = {
+    'u': 0,
+    'r': 1,
+    'd': 2,
+    'l': 3
+}
 
 var jumps = 1;
 var score = 0;
@@ -62,8 +70,8 @@ if (edit) {
     bounds.h -= 40;
 }
 var length = bounds.w > bounds.h ? bounds.w : bounds.h;
-while(length / renderSize > 16) {
-    renderSize += tileSize / 2;
+while(length / renderSize > 20) {
+    renderSize += tileSize;
 }
 var count = 128; // should load from server
 var o = {};
@@ -401,8 +409,11 @@ function _getBuffers(viewport) {
 var _variant = {};
 function _tileXY(d) {
     var type = ptypes[d.type_id] || unknown;
+    // Simple tiles
     if (!type || type.layout_id == 'tile-1')
         return {'x': 0, 'y': 0};
+
+    // Random alternating tiles
     if (type.layout_id == 'alt-4') {
         var key = d.x + ',' + d.y;
         if (!_variant[key]) {
@@ -412,8 +423,20 @@ function _tileXY(d) {
          }
          return _variant[key];
     }
-    if (type.layout_id.indexOf('anim') == 0)
-        return {'x': frame, 'y': 0};
+
+    // Directional and/or animated tiles
+    var isdir = type.layout_id.match(/dir/);
+    var isanim = type.layout_id.match(/anim/);
+    if (isdir || isanim) {
+        var x = 0, y = 0;
+        if (isdir) {
+            y = dirIndex[d.orientation || 'u'];
+        }
+        if (isanim) {
+            x = frame;
+        }
+        return {'x': x, 'y': y};
+    }
 
     // auto-16
     var l = _getTile(d.x - 1, d.y).type_id == d.type_id;
@@ -512,8 +535,20 @@ function click() {
         jumps++;
     score += ptypes[d.type_id].value || 0;
     if (edit) {
+        var orient = d.orientation || 'u', newOrient;
+        if (d.type_id == $('#pointtype').val()) {
+            for (var di in dirIndex) {
+                if (dirIndex[di] == dirIndex[orient] + 1) {
+                    newOrient = di;
+                }
+                if (dirIndex[di] == 0 && dirIndex[orient] == 3) {
+                    newOrient = di;
+                }
+            }
+        }
         d.type_id = $('#pointtype').val();
         d.theme_id = $('#theme').val();
+        d.orientation = newOrient;
     } else {
         d.type_id = 'i';
         d.theme_id = ptheme.id;
@@ -524,7 +559,8 @@ function click() {
         'x': d.x,
         'y': d.y,
         'type_id': d.type_id,
-        'theme_id': d.theme_id
+        'theme_id': d.theme_id,
+        'orientation': d.orientation
     }, {
         'url': 'points/' + d.id,
         'method': 'PUT',

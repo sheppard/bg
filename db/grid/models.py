@@ -28,6 +28,10 @@ class Theme(models.Model):
             self.secondary2,
         ]))
 
+    class Meta:
+        ordering = ('name',)
+
+
 class Layout(models.Model):
     code = models.SlugField()
     name = models.CharField(max_length=40)
@@ -41,7 +45,7 @@ class Variant(models.Model):
         ('180', 'Half Turn'),
         ('270', 'Conter-Clockwise Quarter Turn'),
     ]
-    code = models.CharField(max_length=1)
+    code = models.CharField(max_length=2)
     layout = models.ForeignKey(Layout, related_name='variants')
     x = models.IntegerField()
     y = models.IntegerField()
@@ -71,13 +75,23 @@ class PointType(NaturalKeyModel):
 
     class Meta:
         unique_together = [['code']]
+        ordering = ('name',)
 
 
 class Point(models.Model):
+    ORIENTATION_CHOICES = [
+        ('u', 'Up'),
+        ('r', 'Right'),
+        ('d', 'Down'),
+        ('l', 'Left'),
+    ]
     x = models.IntegerField(db_index=True)
     y = models.IntegerField(db_index=True)
     type = models.ForeignKey(PointType)
     theme = models.ForeignKey(Theme, null=True, blank=True)
+    orientation = models.CharField(
+        max_length=1, choices=ORIENTATION_CHOICES, null=True, blank=True
+    )
     version = models.IntegerField(db_index=True, null=True, blank=True)
 
     def save(self, *args, **kwargs):
