@@ -1,10 +1,13 @@
-define(["d3", "wq/app", "wq/outbox"], function(d3, app, outbox) {
+define(["d3", "wq/app"], function(d3, app) {
 return {
     'name': 'play',
     'init': function(){},
     'run': function(page) {
         if (page == 'play' || page == 'edit') {
+            $('body').css('overflow-y', 'hidden');
             play(page == 'edit')
+        } else {
+            $('body').css('overflow-y', 'auto');
         }
     }
 };
@@ -57,7 +60,6 @@ var dirIndex = {
 
 var jumps = 1;
 var score = 0;
-//var version = 1;
 
 var tileSize = 32;
 var bufferScale = 16;
@@ -171,6 +173,7 @@ var custom = d3.select(document.createElement('custom-elem'));
 var minielem = d3.select(document.createElement('custom-elem-mini'));
 var noffset = d3.select(document.createElement('custom-elem-offset'));
 
+
 noffset.attr('x', o.x);
 noffset.attr('y', o.y);
 o.b = 1;
@@ -184,37 +187,40 @@ function anim() {
     render();
 }
 
-update();
-function update() {
-    var minx = scope.x - scope.w / 2,
-        maxx = scope.x + scope.w / 2,
-        miny = scope.y - scope.h / 2,
-        maxy = scope.y + scope.h / 2;
-    var tiles = _getTiles(minx, miny, maxx, maxy);
-    var last_version = 100000000;
-    tiles.forEach(function(d) {
-        if (d.last_version < last_version)
-            last_version = d.last_version;
-    });
-    var url = '/points.json?version__gt=' + last_version;
-    url += '&x__gte=' + minx;
-    url += '&x__lte=' + maxx;
-    url += '&y__gte=' + miny;
-    url += '&y__lte=' + maxy;
-    d3.json(url, function(data) {
-        tiles.forEach(function(d) {
-            d.last_version = data.last_version;
+var socket = new WebSocket('ws://' + window.location.host + ':10234');
+socket.onmessage = function(msg) {
+    var parts = msg.data.split(' ');
+    var cmd = parts.shift();
+    commands[cmd].apply(this, parts);
+}
+
+var commands = {};
+commands['GRID'] = function(level) {
+    var rows = level.split('\n');
+    // width = rows[0].length;
+    // height = rows.length;
+    rows.forEach(function(row, y) {
+        row.split('').forEach(function(type, x) {
+            if (!grid[x])
+                grid[x] = {};
+            grid[x][y] = {
+                'x': x,
+                'y': y,
+                'type_id': type,
+                'theme_id': null,
+                'orientation': null
+            };
         });
-        data.list.forEach(function(d) {
-            d.last_version = data.last_version;
-            if (!grid[d.x])
-                grid[d.x] = {};
-            if (grid[d.x][d.y] && grid[d.x][d.y].clear && !d.clear)
-                return;
-            grid[d.x][d.y] = d;
-        });
-        setTimeout(update, 1000);
     });
+}
+
+commands['POINT'] = function(x, y, type, theme, orientation) {
+    var pt = grid[x][y];
+    pt.x = +x;
+    pt.y = +y;
+    pt.type_id = type;
+    pt.theme_id = +theme;
+    pt.orientation = orientation;
 }
 
 function _getViewport() {
@@ -295,6 +301,7 @@ function render() {
 
 setInterval(_minimap, 1000);
 function _minimap() {
+    return;
     var pts = [];
     for (var x in grid) {
         for (var y in grid[x]) {
@@ -352,7 +359,7 @@ function _minimap() {
 
 function _getTile(x, y) {
     if (!grid[x] || !grid[x][y])
-        return {'x': x, 'y': y, 'version': -1, 'last_version': -1};
+        return {'x': x, 'y': y};
     var tile = {};
     for (var key in grid[x][y]) {
         tile[key] = grid[x][y][key];
@@ -553,23 +560,17 @@ function click() {
         d.type_id = 'i';
         d.theme_id = ptheme.id;
     }
-    grid[x][y] = d;
 
-    outbox.save({
-        'x': d.x,
-        'y': d.y,
-        'type_id': d.type_id,
-        'theme_id': d.theme_id,
-        'orientation': d.orientation
-    }, {
-        'url': 'points/' + d.id,
-        'method': 'PUT',
-    }).then(function(item) {
-        if (item.saved) {
-            result.last_version = result.version;
-            grid[result.x][result.y] = result;
+    var cmd = "POINT " + d.x + " " + d.y + " " + d.type_id;
+    if (d.theme_id || d.orientation ) {
+        cmd += " " + (d.theme_id || 0)
+        if (d.orientation) {
+            cmd += " " + d.orientation;
         }
-    });
+    }
+    d.type_id = null;
+    grid[x][y] = d;
+    socket.send(cmd);
 }
 
 };
