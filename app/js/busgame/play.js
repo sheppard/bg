@@ -3,16 +3,16 @@ return {
     'name': 'play',
     'init': function(){},
     'run': function(page) {
-        if (page == 'play' || page == 'edit') {
+        if (page == 'play' || page == 'playbg' || page == 'edit') {
             $('body').css('overflow-y', 'hidden');
-            play(page == 'edit')
+            play(page);
         } else {
             $('body').css('overflow-y', 'auto');
         }
     }
 };
 
-function play(edit) {
+function play(mode) {
 
 var ptypes;
 app.models.pointtype.prefetch().then(function(data) {
@@ -68,7 +68,7 @@ var bounds = {
     'w': document.body.clientWidth,
     'h': document.body.clientHeight
 };
-if (edit) {
+if (mode == 'edit') {
     bounds.h -= 40;
 }
 var length = bounds.w > bounds.h ? bounds.w : bounds.h;
@@ -87,11 +87,12 @@ var swidth = renderSize * o.w;
 var sleft = (bounds.w - swidth) / 2;
 var sheight = renderSize * o.h;
 var stop = (bounds.h - sheight) / 2;
-if (edit) {
+if (mode == 'edit') {
     stop += 40;
 }
 var grid = {};
-
+var players = {};
+var playerId;
 
 function nav(d, anim) {
     o.x = d.x;
@@ -223,6 +224,94 @@ commands['POINT'] = function(x, y, type, theme, orientation) {
     pt.orientation = orientation;
 }
 
+commands['PLAYER'] = function(pid, type, theme, x, y, assign) {
+    if (mode != 'play') {
+         return;
+    }
+    var player = players[pid] || {};
+    player.type_id = type;
+    player.theme_id = theme;
+    player.x = +x;
+    player.y = +y;
+    if (assign) {
+        playerId = pid;
+        nav(player);
+    }
+    players[pid] = player;
+};
+
+commands['PATH'] = function() {
+    if (mode != 'play') {
+         return;
+    }
+    var pid = arguments[0];
+    var path = Array.prototype.slice.call(arguments, 1);
+    var player = players[pid] || {};
+    var ppath = {};
+    path.forEach(function(step, i) {
+        var parts = step.match(/^(\d+):(\d+),(\d+)$/);
+        if (!parts) {
+            return;
+        }
+        var f = +parts[1];
+        if (i == 0) {
+            if (f < tickFrame || (f > 950 && tickFrame < 50)) {
+                tickFrame = f;
+            } else {
+                var anyMoving = false;
+                Object.keys(players).forEach(function(opid) {
+                    if (opid == pid)
+                        return;
+                    if (players[opid].moving) {
+                        anyMoving = true;
+                    }
+                });
+                if (!anyMoving) {
+                    tickFrame = f;
+                }
+            }
+        }
+        ppath[f] = {
+            'x': +parts[2],
+            'y': +parts[3]
+        };
+    });
+    player.path = ppath;
+    players[pid] = player;
+}
+
+var ticker = null;
+var last = [];
+var interval = 100;
+commands['TICK'] = function(f) {
+    if (ticker) {
+        clearInterval(ticker);
+    }
+    var current = tickFrame;
+    var server = +f;
+    if (current === null || Math.abs(current - server) > 100) {
+        tickFrame = server;
+    } else if (server % 100 == 0) {
+        var off;
+        if (current < server || (server == 0 && current > 900)) {
+            off = current % 100;
+        } else {
+            off = 100 + current % 100;
+        }
+        interval = interval * (off / 100);
+    }
+    if (interval < 50) {
+        interval = 50;
+    }
+    if (interval > 150) {
+        interval = 150;
+    }
+
+    d3.select('#score').text(Math.round(interval * 10000) / 10000);
+    updateFrame();
+    ticker = setInterval(tick, interval / 4);
+}
+
 function _getViewport() {
     var minx = Math.max(0, Math.floor(o.x - o.w / 2 - o.b)),
         maxx = Math.min(count, Math.ceil(o.x + o.w / 2 + o.b)),
@@ -231,6 +320,73 @@ function _getViewport() {
     return {
         'min': {'x': minx, 'y': miny},
         'max': {'x': maxx, 'y': maxy},
+    }
+}
+
+var tickFrame = null;
+function tick() {
+    if (tickFrame === null) {
+        return;
+    }
+    tickFrame += 0.25;
+    tickFrame = tickFrame % 1000;
+    d3.select('#loc').text(Math.floor(tickFrame));
+    updateFrame();
+}
+function updateFrame() {
+    for (var pid in players) {
+        var player = players[pid];
+        if (!player || !player.path) {
+            continue;
+        }
+        var t1 = Math.floor(tickFrame);
+        var t2 = Math.ceil(tickFrame) % 1000;
+        var off = tickFrame - t1;
+        var coords1 = player.path[t1];
+        var coords2 = player.path[t2];
+        var coords;
+        var orientation;
+        if (!coords1 && !coords2) {
+            var maxt = d3.max(Object.keys(player.path));
+            var mint = d3.min(Object.keys(player.path));
+            if (mint > tickFrame && mint < tickFrame + 50) {
+                // pass
+            } else {
+                coords = player.path[maxt];
+                player.path = null;
+                player.moving = false;
+            }
+        } else if (coords1 && coords2) {
+            coords = {
+                'x': ((1-off) * coords1.x + off * coords2.x),
+                'y': ((1-off) * coords1.y + off * coords2.y)
+            };
+            if (coords1.x != coords2.x || coords1.y != coords2.y) {
+                if (coords1.x > coords2.x) {
+                    orientation = 'l';
+                } else if (coords1.x < coords2.x) {
+                    orientation = 'r';
+                } else if (coords1.y < coords2.y) {
+                    orientation = 'd';
+                } else {
+                    orientation = 'u';
+                }
+            }
+        } else {
+            coords == coords1 || coords2;
+        }
+        if (coords) {
+            player.x = coords.x;
+            player.y = coords.y;
+        }
+        if (orientation) {
+            player.orientation = orientation;
+            player.moving = 2;
+        } else {
+            if (player.moving) {
+                player.moving--;
+            }
+        }
     }
 }
 
@@ -253,6 +409,56 @@ function refresh() {
             renderSize * bufferScale
         );
     });
+    if (!ptypes) return;
+    var viewport = _getViewport();
+    for (var pid in players) {
+        var player = players[pid];
+        var ptype = ptypes[player.type_id];
+        if (player.x >= viewport.min.x - 1
+            && player.y >= viewport.min.y - 1
+            && player.x <= viewport.max.x + 1
+            && player.y <= viewport.max.y + 1) {
+            var tileOffset = _tileXY(player);
+            context.drawImage(
+                ptype.image,
+                tileOffset.x * tileSize,
+                tileOffset.y * tileSize,
+                tileSize,
+                tileSize,
+                (player.x - (noffset.attr('x') - o.w / 2)) * renderSize,
+                (player.y - (noffset.attr('y') - o.h / 2)) * renderSize,
+                renderSize,
+                renderSize
+            );
+            if (player.moving) {
+                tileOffset = _tileXY({
+                    'type_id': 'f',
+                    'orientation': player.orientation
+                });
+                var fx = player.x, fy = player.y;
+                if (player.orientation == 'r') {
+                    fx--;
+                } else if (player.orientation == 'l') {
+                    fx++;
+                } else if (player.orientation == 'u') {
+                    fy++;
+                } else if (player.orientation == 'd') {
+                    fy--;
+                }
+                context.drawImage(
+                    ptypes['f'].image,
+                    tileOffset.x * tileSize,
+                    tileOffset.y * tileSize,
+                    tileSize,
+                    tileSize,
+                    (fx - (noffset.attr('x') - o.w / 2)) * renderSize,
+                    (fy - (noffset.attr('y') - o.h / 2)) * renderSize,
+                    renderSize,
+                    renderSize
+                );
+            }
+        }
+    }
 }
 
 
@@ -293,10 +499,9 @@ function render() {
         });
     draw(pts.enter().append('tile'));
     pts.exit().remove();
-    // draw(pts);
     d3.select('#jumps').text(jumps);
-    d3.select('#score').text(score);
-    d3.select('#loc').text(Math.round(o.x, 1) + ',' + Math.round(o.y, 1));
+//    d3.select('#score').text(score);
+//    d3.select('#loc').text(Math.round(o.x, 1) + ',' + Math.round(o.y, 1));
 }
 
 setInterval(_minimap, 1000);
@@ -521,9 +726,13 @@ function click() {
         nav({'x': x, 'y': y}, true);
         return;
     }
+    if (mode == 'play') {
+        socket.send('GO ' + x + ' ' + y);
+        return;
+    }
 
     var d = _getTile(x, y);
-    if (!edit) {
+    if (mode == 'playbg') {
         if (!d.type_id || d.type_id == 'p' || d.theme_id == ptheme.id || !ptypes[d.type_id])
             return;
         var c1 = check(d, -1, 0)
@@ -541,7 +750,7 @@ function click() {
     if (d.type_id == 'j')
         jumps++;
     score += ptypes[d.type_id].value || 0;
-    if (edit) {
+    if (mode == 'edit') {
         var orient = d.orientation || 'u', newOrient;
         if (d.type_id == $('#pointtype').val()) {
             for (var di in dirIndex) {
