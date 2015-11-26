@@ -247,7 +247,7 @@ commands['PATH'] = function() {
     var pid = arguments[0];
     var path = Array.prototype.slice.call(arguments, 1);
     var player = players[pid] || {};
-    var ppath = {};
+    var ppath = {}, lastStep;
     path.forEach(function(step, i) {
         var parts = step.match(/^(\d+):(\d+),(\d+)$/);
         if (!parts) {
@@ -271,12 +271,13 @@ commands['PATH'] = function() {
                 }
             }
         }
-        ppath[f] = {
+        ppath[f] = lastStep = {
             'x': +parts[2],
             'y': +parts[3]
         };
     });
     player.path = ppath;
+    player.target = lastStep;
     players[pid] = player;
 }
 
@@ -349,11 +350,20 @@ function updateFrame() {
         if (!coords1 && !coords2) {
             var maxt = d3.max(Object.keys(player.path));
             var mint = d3.min(Object.keys(player.path));
+            if (player.path[0] && player.path[999]) {
+                maxt = d3.max(Object.keys(player.path).filter(function(d) {
+                    return d < 800;
+                }));
+                mint = d3.min(Object.keys(player.path).filter(function(d) {
+                    return d >= 800;
+                }));
+            }
             if (mint > tickFrame && mint < tickFrame + 50) {
-                // pass
+                // FIXME: catch wraparound?
             } else {
-                coords = player.path[maxt];
+                coords = player.target || player;
                 player.path = null;
+                player.target = null;
                 player.moving = false;
             }
         } else if (coords1 && coords2) {

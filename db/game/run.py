@@ -4,6 +4,7 @@ import asyncio
 from grid.util import make_level
 # from grid.models import Point
 import random
+from dijkstar import Graph, find_path, NoPathError
 
 class Point(object):
     x = None
@@ -39,8 +40,9 @@ class Player(object):
     target_y = None
     plan = {}
 
-    def __init__(self, client):
+    def __init__(self, client, game):
         self.client = client
+        self.game = game
         Player.count += 1
         self.id = Player.count
         self.type_id = self.id % 5
@@ -66,25 +68,18 @@ class Player(object):
             self.target_y = None
 
     def set_target(self, frame, tx, ty):
-        self.target_x = tx
-        self.target_y = ty
+        if self.target_x == tx and self.target_y == ty:
+            return False
         lx, ly = self.x, self.y
         self.plan = {}
-        self.plan[frame] = lx, ly
-        while lx != tx or ly != ty:
+        path = self.game.find_path((lx, ly), (tx, ty))
+        if path:
+            self.target_x, self.target_y = path[-1]
+        for step in path:
+            self.plan[frame] = step
             frame += 1
             frame = frame % 1000
-            if abs(tx - lx) > abs(ty - ly):
-                if tx > lx:
-                    lx += 1
-                elif tx < lx:
-                    lx -= 1
-            else:
-                if ty > ly:
-                    ly += 1
-                elif ty < ly:
-                    ly -= 1
-            self.plan[frame] = lx, ly
+        return True
 
     def get_plan(self, frame):
         if not self.plan or frame not in self.plan:
@@ -109,6 +104,7 @@ class Game(object):
         self.height = level_str.count('\n')
         self.level = []
         self.players = set()
+        self.graph = Graph()
 
         for y in range(0, self.height):
             row = []
@@ -122,6 +118,58 @@ class Game(object):
                     orientation=None
                 ))
             self.level.append(row)
+
+        for pt in self.all_points:
+            if pt.type_id == 'p':
+                continue
+            neighbors = []
+            if pt.x > 0:
+                neighbors.append(self.level[pt.y][pt.x - 1])
+            if pt.x < self.width - 1:
+                neighbors.append(self.level[pt.y][pt.x + 1])
+            if pt.y > 0:
+                neighbors.append(self.level[pt.y - 1][pt.x])
+            if pt.y < self.height + 1:
+                neighbors.append(self.level[pt.y + 1][pt.x])
+            for npt in neighbors:
+                self.graph.add_edge((npt.x, npt.y), (pt.x, pt.y), 1)
+
+    def find_path(self, pt1, pt2):
+        def manhattan(u, v, edge, prev_edge):
+            return abs(u[0] - v[0]) + abs(u[1] - v[1])
+        try:
+            nodes, edges, costs, final_cost = find_path(
+                self.graph, pt1, pt2, heuristic_func=manhattan
+            )
+            result = []
+            f = self.frame
+            for i, (x, y) in enumerate(nodes):
+                if f > self.frame and self.check_conflict(f, x, y):
+                    if self.check_conflict((f + 1) % 1000, x, y):
+                        return result
+                    else:
+                        result.append(result[-1])
+                        f += 1
+                result.append((x, y))
+                f += 1
+            return result
+        except NoPathError:
+            return []
+
+    def check_conflict(self, frame, x, y):
+        for player in self.players:
+            if not player.plan:
+                if player.x == x and player.y == y:
+                    return True
+                else:
+                    continue
+
+            if frame in player.plan:
+                if player.plan[frame] == (x, y):
+                    return True
+
+            elif player.target_x == x and player.target_y == y:
+                return True
 
     def to_str(self):
         s = 'GRID '
@@ -171,8 +219,8 @@ class Game(object):
 
     @asyncio.coroutine
     def process_go(self, player, x, y):
-        player.set_target(self.frame, int(x), int(y))
-        yield from self.broadcast(player.path_str(self.frame))
+        if player.set_target(self.frame, int(x), int(y)):
+            yield from self.broadcast(player.path_str(self.frame))
 
     @asyncio.coroutine
     def broadcast(self, msg):
@@ -183,8 +231,8 @@ class Game(object):
 
     @asyncio.coroutine
     def new_player(self, client):
-        player = Player(client)
-        while player.x is None or self.level[player.x][player.y].type_id == 'p':
+        player = Player(client, self)
+        while player.x is None or self.level[player.y][player.x].type_id == 'p':
             player.x = random.randint(0, self.width - 1)
             player.y = random.randint(0, self.height - 1)
         self.players.add(player)
@@ -205,4 +253,5 @@ class Game(object):
                  yield from player.client.send(pt.to_str())
         for pl in self.players:
             yield from player.client.send(pl.to_str())
+            yield from player.client.send(pl.path_str(self.frame))
         yield from self.broadcast(player.to_str())
