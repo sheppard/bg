@@ -498,12 +498,21 @@ function render() {
         current = _getTiles(minx, miny, maxx, maxy);
     current.forEach(function(d) {
         d.tileOffset = _tileXY(d);
+        var ptype = ptypes[d.type_id];
+        if (!ptype) {
+            return;
+        }
+        var img = ptype.image;
+        if (d.theme_id) {
+            img = ptype.themes[d.theme_id];
+        }
+        d.tileLoaded = img.complete;
     });
     var pts = custom.selectAll('tile')
         .data(current, function(d){
             return (
-                d.x + '/' + d.y +
-                d.type_id + '/' + d.theme_id + '/' +
+                d.x + '/' + d.y + '/' +
+                d.type_id + '/' + d.theme_id + '/' + d.tileLoaded + '/' +
                 d.tileOffset.x + '/' + d.tileOffset.y
             );
         });
