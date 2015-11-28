@@ -18,6 +18,10 @@
         <table>
           <tr><th>Name</th><td>{{name}}</td></tr>
           <tr><th>Layout Class</th><td>{{layout_label}}</td></tr>
+          <tr><th>Layer</th><td>{{layer_label}}</td></tr>
+          {{#replace_with_id}}
+          <tr><th>Turns Into</th><td>{{replace_with_label}}</td></tr>
+          {{/replace_with_id}}
           {{#theme}}
           <tr><th>Theme</th><td>{{theme_label}}</td></tr>
           {{/theme}}

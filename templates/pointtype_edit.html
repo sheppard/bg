@@ -36,7 +36,27 @@
                 <option value="{{id}}"{{#selected}} selected{{/selected}}>{{label}}</option>
                 {{/layout_list}}
               </select>
-              <p class="error pointtype-layout-errors"></p>
+              <p class="error pointtype-layout_id-errors"></p>
+            </li>
+            <li>
+              <label for="layer">Layer</label>
+              <select id="layer" name="layer">
+                <option value="">Select one...</option>
+                {{#layer_choices}}
+                <option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>
+                {{/layer_choices}}
+              </select>
+              <p class="error pointtype-layer-errors"></p>
+            </li>
+            <li>
+              <label for="replace_with_id">Turns Into</label>
+              <select id="replace_with_id" name="replace_with_id">
+                <option value="">Select one...</option>
+                {{#replace_with_list}}
+                <option value="{{id}}"{{#selected}} selected{{/selected}}>{{label}}</option>
+                {{/replace_with_list}}
+              </select>
+              <p class="error pointtype-replace_with_id-errors"></p>
             </li>
             <li>
               <label for="theme_id">Theme</label>

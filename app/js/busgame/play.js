@@ -347,6 +347,7 @@ function updateFrame() {
         var coords2 = player.path[t2];
         var coords;
         var orientation;
+        var ptype;
         if (!coords1 && !coords2) {
             var maxt = d3.max(Object.keys(player.path));
             var mint = d3.min(Object.keys(player.path));
@@ -365,6 +366,7 @@ function updateFrame() {
                 player.path = null;
                 player.target = null;
                 player.moving = false;
+                ptype = ptypes[grid[coords.x][coords.y]];
             }
         } else if (coords1 && coords2) {
             coords = {
@@ -382,8 +384,16 @@ function updateFrame() {
                     orientation = 'u';
                 }
             }
+            var ptype1 = ptypes[grid[coords1.x][coords1.y].type_id];
+            var ptype2 = ptypes[grid[coords2.x][coords2.y].type_id];
+            if (ptype2 && ptype2.layer == 'a') {
+                ptype = ptype2;
+            } else {
+                ptype = ptype1;
+            }
         } else {
             coords == coords1 || coords2;
+            ptype = ptypes[grid[coords.x][coords.y]];
         }
         if (coords) {
             player.x = coords.x;
@@ -397,6 +407,9 @@ function updateFrame() {
                 player.moving--;
             }
         }
+        if (ptype) {
+            player.under = (ptype.layer == 'a');
+        }
     }
 }
 
@@ -404,6 +417,7 @@ d3.timer(refresh);
 function refresh() {
     var buffers = _getBuffers(_getViewport());
     context.clearRect(0, 0, swidth, sheight);
+    drawPlayers(true);
     buffers.forEach(function(buffer) {
         var ox = (noffset.attr('x') - o.w / 2 - (buffer.x * bufferScale)) * renderSize;
         var oy = (noffset.attr('y') - o.h / 2 - (buffer.y * bufferScale)) * renderSize;
@@ -419,56 +433,68 @@ function refresh() {
             renderSize * bufferScale
         );
     });
+    drawPlayers(false);
+}
+
+function drawPlayers(under) {
     if (!ptypes) return;
     var viewport = _getViewport();
     for (var pid in players) {
         var player = players[pid];
-        var ptype = ptypes[player.type_id];
-        if (player.x >= viewport.min.x - 1
-            && player.y >= viewport.min.y - 1
-            && player.x <= viewport.max.x + 1
-            && player.y <= viewport.max.y + 1) {
-            var tileOffset = _tileXY(player);
-            context.drawImage(
-                ptype.image,
-                tileOffset.x * tileSize,
-                tileOffset.y * tileSize,
-                tileSize,
-                tileSize,
-                (player.x - (noffset.attr('x') - o.w / 2)) * renderSize,
-                (player.y - (noffset.attr('y') - o.h / 2)) * renderSize,
-                renderSize,
-                renderSize
-            );
-            if (player.moving) {
-                tileOffset = _tileXY({
-                    'type_id': 'f',
-                    'orientation': player.orientation
-                });
-                var fx = player.x, fy = player.y;
-                if (player.orientation == 'r') {
-                    fx--;
-                } else if (player.orientation == 'l') {
-                    fx++;
-                } else if (player.orientation == 'u') {
-                    fy++;
-                } else if (player.orientation == 'd') {
-                    fy--;
-                }
-                context.drawImage(
-                    ptypes['f'].image,
-                    tileOffset.x * tileSize,
-                    tileOffset.y * tileSize,
-                    tileSize,
-                    tileSize,
-                    (fx - (noffset.attr('x') - o.w / 2)) * renderSize,
-                    (fy - (noffset.attr('y') - o.h / 2)) * renderSize,
-                    renderSize,
-                    renderSize
-                );
-            }
+        if (!!player.under != !!under) {
+            continue;
         }
+        if (player.x < viewport.min.x - 1
+            && player.y < viewport.min.y - 1
+            && player.x > viewport.max.x + 1
+            && player.y > viewport.max.y + 1) {
+            continue;
+        }
+        drawPlayer(player);
     }
+}
+function drawPlayer(player) {
+    var ptype = ptypes[player.type_id];
+    var tileOffset = _tileXY(player);
+    context.drawImage(
+        ptype.image,
+        tileOffset.x * tileSize,
+        tileOffset.y * tileSize,
+        tileSize,
+        tileSize,
+        (player.x - (noffset.attr('x') - o.w / 2)) * renderSize,
+        (player.y - (noffset.attr('y') - o.h / 2)) * renderSize,
+        renderSize,
+        renderSize
+    );
+    if (!player.moving) {
+        return;
+    }
+    tileOffset = _tileXY({
+        'type_id': 'f',
+        'orientation': player.orientation
+    });
+    var fx = player.x, fy = player.y;
+    if (player.orientation == 'r') {
+        fx--;
+    } else if (player.orientation == 'l') {
+        fx++;
+    } else if (player.orientation == 'u') {
+        fy++;
+    } else if (player.orientation == 'd') {
+        fy--;
+    }
+    context.drawImage(
+        ptypes['f'].image,
+        tileOffset.x * tileSize,
+        tileOffset.y * tileSize,
+        tileSize,
+        tileSize,
+        (fx - (noffset.attr('x') - o.w / 2)) * renderSize,
+        (fy - (noffset.attr('y') - o.h / 2)) * renderSize,
+        renderSize,
+        renderSize
+    );
 }
 
 
@@ -503,7 +529,7 @@ function render() {
             return;
         }
         var img = ptype.image;
-        if (d.theme_id) {
+        if (d.theme_id && ptype.themes) {
             img = ptype.themes[d.theme_id];
         }
         d.tileLoaded = img.complete;

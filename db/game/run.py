@@ -1,10 +1,20 @@
-#!/usr/bin/env python3
-
 import asyncio
 from grid.util import make_level
-# from grid.models import Point
 import random
 from dijkstar import Graph, find_path, NoPathError
+from wq.io import JsonNetIO
+import os
+
+
+class PointTypeIO(JsonNetIO):
+    url = "http://%s/pointtypes.json" % os.environ['BG_HOST']
+    namespace = "list"
+
+
+ptypes = {}
+for ptype in PointTypeIO():
+    ptypes[ptype.code] = ptype
+
 
 class Point(object):
     x = None
@@ -45,8 +55,8 @@ class Player(object):
         self.game = game
         Player.count += 1
         self.id = Player.count
-        self.type_id = self.id % 5
-        self.theme_id = self.id % 5
+        self.type_id = str(self.id % 5)
+        self.theme_id = str(self.id % 5)
 
     def to_str(self):
         return "PLAYER %s %s %s %s %s" % (
@@ -60,12 +70,18 @@ class Player(object):
              s += " %s:%s,%s" % ((frame + f) % 1000, x, y)
         return s
 
+    @asyncio.coroutine
     def tick(self, frame):
         self.x, self.y = self.get_plan(frame)[0]
         if self.x == self.target_x and self.y == self.target_y:
             self.plan = {}
             self.target_x = None
             self.target_y = None
+        ptype = ptypes[self.game.level[self.y][self.x].type_id]
+        if ptype.layer == 'c' and ptype.replace_with_id:
+            yield from self.game.process_point(
+                self, self.x, self.y, ptype.replace_with_id, self.theme_id,
+            )
 
     def set_target(self, frame, tx, ty):
         if self.target_x == tx and self.target_y == ty:
@@ -120,19 +136,27 @@ class Game(object):
             self.level.append(row)
 
         for pt in self.all_points:
-            if pt.type_id == 'p':
-                continue
-            neighbors = []
-            if pt.x > 0:
-                neighbors.append(self.level[pt.y][pt.x - 1])
-            if pt.x < self.width - 1:
-                neighbors.append(self.level[pt.y][pt.x + 1])
-            if pt.y > 0:
-                neighbors.append(self.level[pt.y - 1][pt.x])
-            if pt.y < self.height + 1:
-                neighbors.append(self.level[pt.y + 1][pt.x])
-            for npt in neighbors:
-                self.graph.add_edge((npt.x, npt.y), (pt.x, pt.y), 1)
+            self.set_node(pt)
+
+    def set_node(self, pt):
+        ptype = ptypes[pt.type_id]
+        if ptype.layer == 'e':
+            cost = 50
+        elif ptype.layer == 'd':
+            cost = 5
+        else:
+            cost = 1
+        neighbors = []
+        if pt.x > 0:
+            neighbors.append(self.level[pt.y][pt.x - 1])
+        if pt.x < self.width - 1:
+            neighbors.append(self.level[pt.y][pt.x + 1])
+        if pt.y > 0:
+            neighbors.append(self.level[pt.y - 1][pt.x])
+        if pt.y < self.height - 1:
+            neighbors.append(self.level[pt.y + 1][pt.x])
+        for npt in neighbors:
+            self.graph.add_edge((npt.x, npt.y), (pt.x, pt.y), cost)
 
     def find_path(self, pt1, pt2):
         def manhattan(u, v, edge, prev_edge):
@@ -144,6 +168,9 @@ class Game(object):
             result = []
             f = self.frame
             for i, (x, y) in enumerate(nodes):
+                ptype = ptypes[self.level[y][x].type_id]
+                if ptype.layer in ('d', 'e'):
+                    return result
                 if f > self.frame and self.check_conflict(f, x, y):
                     if self.check_conflict((f + 1) % 1000, x, y):
                         return result
@@ -196,7 +223,7 @@ class Game(object):
                 self.sync_frame = 0
                 yield from self.broadcast("TICK %s" % self.frame)
         for player in self.players:
-            player.tick(self.frame)
+            yield from player.tick(self.frame)
 
     @asyncio.coroutine
     def process(self, player, data):
@@ -215,6 +242,7 @@ class Game(object):
         pt.type_id = type_id
         pt.theme_id = theme_id
         pt.orientation = orientation
+        self.set_node(pt)
         yield from self.broadcast(pt.to_str())
 
     @asyncio.coroutine

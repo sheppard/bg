@@ -56,11 +56,12 @@ class Variant(models.Model):
     )
 
 class PointType(NaturalKeyModel):
-    LAYOUT_CHOICES = [
-        ('tile-1', 'Single Tile'),
-        ('alt-4', 'Four alternating tiles'),
-        ('anim-4', 'Four-frame animation'),
-        ('auto-16', 'Auto layout (4x4)')
+    LAYER_CHOICES = [
+        ('a', 'Above Players'),
+        ('b', 'Below Players'),
+        ('c', 'Collectible'),
+        ('d', 'Destroyable'),
+        ('e', 'Enduring'),
     ]
 
     code = models.CharField(max_length=1)
@@ -68,7 +69,13 @@ class PointType(NaturalKeyModel):
     value = models.IntegerField(default=0)
     path = models.FileField(upload_to="sprites")
     layout = models.ForeignKey(Layout, null=True, blank=True)
+    layer = models.CharField(
+        max_length=1,
+        choices=LAYER_CHOICES,
+        default='c',
+    )
     theme = models.ForeignKey(Theme, null=True, blank=True)
+    replace_with = models.ForeignKey("self", null=True, blank=True)
 
     def __str__(self):
         return self.name
