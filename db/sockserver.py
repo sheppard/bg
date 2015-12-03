@@ -26,4 +26,3 @@ server = websockets.serve(handler, '0.0.0.0', 10234)
 asyncio.get_event_loop().run_until_complete(
     asyncio.gather(server, tick())
 )
-asyncio.get_event_loop().run_forever()

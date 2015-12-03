@@ -229,6 +229,7 @@ commands['PLAYER'] = function(pid, type, theme, x, y, assign) {
          return;
     }
     var player = players[pid] || {};
+    player.id = pid;
     player.type_id = type;
     player.theme_id = theme;
     player.x = +x;
@@ -239,6 +240,22 @@ commands['PLAYER'] = function(pid, type, theme, x, y, assign) {
     }
     players[pid] = player;
 };
+commands['PROJECTILE'] = function(pid, type, x, y, direction, destroy) {
+    if (mode != 'play') {
+         return;
+    }
+    var proj = players[pid] || {};
+    proj.id = pid;
+    proj.player_id = pid.split('-')[0];
+    proj.type_id = type;
+    proj.x = +x;
+    proj.y = +y;
+    proj.direction = direction;
+    players[proj.player_id].orientation = direction;
+    proj.destroy_type_id = destroy;
+    proj.is_proj = true;
+    players[pid] = proj;
+}
 
 commands['PATH'] = function() {
     if (mode != 'play') {
@@ -363,6 +380,17 @@ function updateFrame() {
                 // FIXME: catch wraparound?
             } else {
                 coords = player.target || player;
+                if (player.is_proj) {
+                     player.type_id = player.destroy_type_id;
+                     player.frame = 0;
+                     player.destroy = setInterval(function() {
+                         player.frame++;
+                         if (player.frame > 3) {
+                              clearInterval(player.destroy);
+                              delete players[player.id];
+                         }
+                     }, 150);
+                }
                 player.path = null;
                 player.target = null;
                 player.moving = false;
@@ -392,7 +420,7 @@ function updateFrame() {
                 ptype = ptype1;
             }
         } else {
-            coords == coords1 || coords2;
+            coords = coords1 || coords2;
             ptype = ptypes[grid[coords.x][coords.y]];
         }
         if (coords) {
@@ -417,7 +445,8 @@ d3.timer(refresh);
 function refresh() {
     var buffers = _getBuffers(_getViewport());
     context.clearRect(0, 0, swidth, sheight);
-    drawPlayers(true);
+    drawPlayers(true, true);
+    drawPlayers(true, false);
     buffers.forEach(function(buffer) {
         var ox = (noffset.attr('x') - o.w / 2 - (buffer.x * bufferScale)) * renderSize;
         var oy = (noffset.attr('y') - o.h / 2 - (buffer.y * bufferScale)) * renderSize;
@@ -433,15 +462,19 @@ function refresh() {
             renderSize * bufferScale
         );
     });
-    drawPlayers(false);
+    drawPlayers(false, true);
+    drawPlayers(false, false);
 }
 
-function drawPlayers(under) {
+function drawPlayers(under, proj) {
     if (!ptypes) return;
     var viewport = _getViewport();
     for (var pid in players) {
         var player = players[pid];
         if (!!player.under != !!under) {
+            continue;
+        }
+        if (!!player.is_proj != !!proj) {
             continue;
         }
         if (player.x < viewport.min.x - 1
@@ -467,7 +500,7 @@ function drawPlayer(player) {
         renderSize,
         renderSize
     );
-    if (!player.moving) {
+    if (!player.moving || player.is_proj) {
         return;
     }
     tileOffset = _tileXY({
@@ -690,7 +723,11 @@ function _tileXY(d) {
             y = dirIndex[d.orientation || 'u'];
         }
         if (isanim) {
-            x = frame;
+            if (d.frame !== undefined) {
+                x = d.frame;
+            } else {
+                x = frame;
+            }
         }
         return {'x': x, 'y': y};
     }
@@ -760,10 +797,17 @@ function check(pt, ox, oy) {
    return _getTile(pt.x + ox, pt.y + oy).theme_id == ptheme.id;
 }
 
-function click() {
+
+function mouse() {
     var coords = d3.mouse(this);
-    var x = Math.round(coords[0] / renderSize + o.x - 0.5) - (o.w / 2);
-    var y = Math.round(coords[1] / renderSize + o.y - 0.5) - (o.h / 2);
+    coords[0] = Math.round(coords[0] / renderSize + o.x - 0.5) - (o.w / 2);
+    coords[1] = Math.round(coords[1] / renderSize + o.y - 0.5) - (o.h / 2);
+    return coords;
+}
+
+function click() {
+    var coords = mouse.call(this);
+    var x = coords[0], y = coords[1];
     var dx = x - o.x;
     var dy = y - o.y;
     if (dx > (o.w / 2 - 2) || dx < (-o.w / 2 + 1) ||
@@ -772,7 +816,7 @@ function click() {
         return;
     }
     if (mode == 'play') {
-        socket.send('GO ' + x + ' ' + y);
+        handleClick(x, y);
         return;
     }
 
@@ -825,6 +869,55 @@ function click() {
     d.type_id = null;
     grid[x][y] = d;
     socket.send(cmd);
+}
+
+function handleClick(x, y) {
+    var xi = players[playerId].x; 
+    var yi = players[playerId].y; 
+    var dx = x - xi;
+    var dy = y - yi;
+    var dir, xd = 0, yd = 0;
+    if (dx == 0 || dy == 0) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+            if (dx > 0) {
+                dir = 'r';
+                xd = 1;
+            } else {
+                dir = 'l';
+                xd = -1;
+            }
+        } else {
+            if (dy > 0) {
+                dir = 'd';
+                yd = 1;
+            } else {
+                dir = 'u';
+                yd = -1;
+            }
+        }
+        var ptype = ptypes[grid[x][y].type_id];
+        if ((ptype.layer == 'd' || ptype.layer == 'e') ||
+            (Math.abs(dx) + Math.abs(dy) == 2 && (ptype.layer == 'a' || ptype.layer == 'b'))) {
+            while (xi != x - xd || yi != y - yd) {
+                xi += xd;
+                yi += yd;
+                ptype = ptypes[grid[xi][yi].type_id];
+                if (ptype.layer != 'a' && ptype.layer != 'b') {
+                    dir = false;
+                }
+            }
+            if (ptype.layer == 'e' && Math.abs(dx) + Math.abs(dy) == 1) {
+                dir = false;
+            }
+        } else {
+            dir = false; 
+        }
+    }
+    if (dir) {
+        socket.send('FIRE ' + dir);
+    } else {
+        socket.send('GO ' + x + ' ' + y);
+    }
 }
 
 };

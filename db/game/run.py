@@ -4,6 +4,15 @@ import random
 from dijkstar import Graph, find_path, NoPathError
 from wq.io import JsonNetIO
 import os
+import string
+
+def random_string(length):
+    chars = ''
+    for i in range(length):
+        chars += random.choice(
+            string.ascii_uppercase
+        )
+    return chars
 
 
 class PointTypeIO(JsonNetIO):
@@ -108,6 +117,79 @@ class Player(object):
             f = f % 1000
         return plan
 
+class Projectile(object):
+    x = None
+    y = None
+    direction = None
+    type_id = None
+    theme_id = None
+    target_x = None
+    target_y = None
+    plan = {}
+    game = None
+    countdown = None
+
+    def __init__(self, player, direction, game):
+        self.player = player
+        self.direction = direction
+        self.game = game
+        self.x = player.x
+        self.y = player.y
+        self.set_target(game.frame)
+        self.id = "%s-%s" % (player.id, random_string(3))
+        self.type_id = 'r'
+        self.theme_id = player.theme_id
+
+    def to_str(self):
+        return "PROJECTILE %s %s %s %s %s %s" % (
+            self.id, self.type_id, self.x, self.y, self.direction,
+            'x' if self.destroy else 'v'
+        )
+
+    def path_str(self, frame):
+        plan = self.get_plan(frame)
+        s = "PATH %s" % self.id
+        for f, (x, y) in enumerate(plan):
+             s += " %s:%s,%s" % ((frame + f) % 1000, x, y)
+        return s
+
+    @asyncio.coroutine
+    def tick(self, frame):
+        self.x, self.y = self.get_plan(frame)[0]
+        if self.x != self.target_x or self.y != self.target_y:
+            return
+        if self.countdown is None:
+            self.countdown = 2
+        self.countdown -= 1
+        if self.countdown == 0:
+            ptype = ptypes[self.game.level[self.y][self.x].type_id]
+            if self.destroy and ptype.replace_with_id:
+                yield from self.game.process_point(
+                    self, self.x, self.y, ptype.replace_with_id, self.theme_id,
+                )
+            yield from self.game.remove_projectile(self)
+
+    def set_target(self, frame):
+        self.plan = {}
+        path, destroy = self.game.find_line(self.x, self.y, self.direction)
+        if path:
+            self.target_x, self.target_y = path[-1]
+        for step in path:
+            self.plan[frame] = step
+            frame += 1
+            frame = frame % 1000
+        self.destroy = destroy
+
+    def get_plan(self, frame):
+        if not self.plan or frame not in self.plan:
+            return [(self.x, self.y)]
+        plan = []
+        f = frame
+        while f in self.plan:
+            plan.append(self.plan[f])
+            f += 1
+            f = f % 1000
+        return plan
 
 class Game(object):
     frame = 0
@@ -120,6 +202,7 @@ class Game(object):
         self.height = level_str.count('\n')
         self.level = []
         self.players = set()
+        self.projectiles = set()
         self.graph = Graph()
 
         for y in range(0, self.height):
@@ -183,6 +266,26 @@ class Game(object):
         except NoPathError:
             return []
 
+    def find_line(self, x, y, direction):
+        path = []
+        layer = None
+        destroy = False
+        while not layer or layer not in ('c', 'd', 'e'):
+            path.append((x, y))
+            if direction == 'l':
+                x -= 1
+            if direction == 'r':
+                x += 1
+            if direction == 'u':
+                y -= 1
+            if direction == 'd':
+                y += 1
+            layer = ptypes[self.level[y][x].type_id].layer
+        if layer in ('c', 'd'):
+            path.append((x, y))
+            destroy = True
+        return path, destroy
+
     def check_conflict(self, frame, x, y):
         for player in self.players:
             if not player.plan:
@@ -222,8 +325,10 @@ class Game(object):
             if self.sync_frame == 1:
                 self.sync_frame = 0
                 yield from self.broadcast("TICK %s" % self.frame)
-        for player in self.players:
+        for player in list(self.players):
             yield from player.tick(self.frame)
+        for proj in list(self.projectiles):
+            yield from proj.tick(self.frame)
 
     @asyncio.coroutine
     def process(self, player, data):
@@ -235,6 +340,8 @@ class Game(object):
             yield from self.process_point(player, *args)
         elif cmd == "GO":
             yield from self.process_go(player, *args)
+        elif cmd == "FIRE":
+            yield from self.process_fire(player, *args)
 
     @asyncio.coroutine
     def process_point(self, player, x, y, type_id, theme_id=None, orientation=None):
@@ -270,6 +377,17 @@ class Game(object):
     @asyncio.coroutine
     def remove_player(self, player):
         self.players.remove(player)
+
+    @asyncio.coroutine
+    def process_fire(self, player, direction):
+        proj = Projectile(player, direction, self)
+        self.projectiles.add(proj)
+        yield from self.broadcast(proj.to_str())
+        yield from self.broadcast(proj.path_str(self.frame))
+
+    @asyncio.coroutine
+    def remove_projectile(self, projectile):
+        self.projectiles.remove(projectile)
 
     @asyncio.coroutine
     def send_initial(self, player):

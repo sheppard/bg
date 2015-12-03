@@ -203,6 +203,12 @@ function copyVariant(v) {
         tileSize
     );
     scratchContext.restore();
+    imageContext.clearRect(
+        v.x * tileSize,
+        v.y * tileSize,
+        tileSize,
+        tileSize
+    );
     imageContext.drawImage(
         scratch,
         0,
