@@ -7,6 +7,7 @@ from .models import PointType, Theme
 from io import BytesIO
 import os
 from matplotlib.colors import hex2color
+import random
 
 
 TEMP_COLORS = [
@@ -51,6 +52,9 @@ def generate_theme(request, theme, image):
             )
 
     tdir = os.path.join(settings.MEDIA_ROOT, theme_id, os.path.dirname(image))
+    return save_and_return(tdir, name, img)
+
+def save_and_return(tdir, name, img):
     try:
         os.makedirs(tdir)
     except OSError:
@@ -63,3 +67,32 @@ def generate_theme(request, theme, image):
         output.read(),
         content_type='image/png'
     )
+
+
+def get_parts(code):
+    ptype = PointType.objects.get(code=code)
+    img = Image.open(ptype.path)
+    tiles = []
+    for tx in (0, 1):
+        for ty in (0, 1):
+            part = img.crop([tx * 32, ty * 32, (tx+1) * 32, (ty+1) * 32])
+            tiles.append(part)
+    return tiles
+
+
+def generate_bg(request, level, scale, x, y):
+    out = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+    parts = get_parts('a')
+    special = Image.open(PointType.objects.get(code='A').path)
+    for tx in range(0, 8):
+        for ty in range(0, 8):
+            if random.random() > 0.95:
+                out.paste(special, (tx * 32, ty * 32))
+            else:
+                part = random.choice(parts)
+                out.paste(part, (tx * 32, ty * 32))
+
+    tdir = os.path.join(settings.MEDIA_ROOT, 'bg', str(level), str(scale), str(x))
+    name = "%s.png" % y
+    out = out.resize(((int(scale) * 256), (int(scale) * 256)))
+    return save_and_return(tdir, name, out)

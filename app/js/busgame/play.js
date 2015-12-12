@@ -75,12 +75,29 @@ var length = bounds.w > bounds.h ? bounds.w : bounds.h;
 while(length / renderSize > 20) {
     renderSize += tileSize;
 }
+var scale = renderSize / tileSize;
+var bg = d3.select('#play').append('div')
+    .style('position', 'fixed')
+    .style('width', '100%')
+    .style('height', '100%')
+    .style('top', '0px')
+    .style('left', '0px')
+for (var bgx = 0; bgx <= (bounds.w / renderSize / 8); bgx++) {
+    for (var bgy = 0; bgy <= (bounds.h / renderSize / 8); bgy++) {
+        bg.append('img')
+            .attr('src', '/media/bg/0/' + scale + '/' + bgx + '/' + bgy + '.png')
+            .style('position', 'fixed')
+            .style('left', (bgx * renderSize * 8) + 'px')
+            .style('top', (bgy * renderSize * 8) + 'px')
+    }
+}
+
 var count = 128; // should load from server
 var o = {};
 o.x = Math.round(Math.random() * count / 2 + count / 4);
 o.y = Math.round(Math.random() * count / 2 + count / 4);
-o.w = Math.floor(bounds.w / renderSize / 2) * 2;
-o.h = Math.floor(bounds.h / renderSize / 2) * 2;
+o.w = Math.floor(bounds.w / renderSize / 2) * 2 + 2;
+o.h = Math.floor(bounds.h / renderSize / 2) * 2 + 2;
 var last = {'x': o.x, 'y': o.y, 'w': o.w, 'h': o.h};
 var scope = {'x': o.x, 'y': o.y, 'w': 20, 'h': 20};
 var swidth = renderSize * o.w;
@@ -733,10 +750,10 @@ function _tileXY(d) {
     }
 
     // auto-16
-    var l = _getTile(d.x - 1, d.y).type_id == d.type_id;
-    var r = _getTile(d.x + 1, d.y).type_id == d.type_id;
-    var u = _getTile(d.x, d.y - 1).type_id == d.type_id;
-    var d = _getTile(d.x, d.y + 1).type_id == d.type_id;
+    var l = sameLayer(_getTile(d.x - 1, d.y), d);
+    var r = sameLayer(_getTile(d.x + 1, d.y), d);
+    var u = sameLayer(_getTile(d.x, d.y - 1), d);
+    var d = sameLayer(_getTile(d.x, d.y + 1), d);
 
     var tx = r + 3 * l - 2 * r * l;
     var ty = d + 3 * u - 2 * u * d;
@@ -745,6 +762,15 @@ function _tileXY(d) {
         'x': tx,
         'y': ty
     }
+}
+
+function sameLayer(pt1, pt2) {
+    var ptype1 = ptypes[pt1.type_id];
+    var ptype2 = ptypes[pt2.type_id];
+    if (!ptype1 || !ptype2) {
+        return false;
+    }
+    return ptype1.layer == ptype2.layer;
 }
 
 function draw(pts) {
@@ -810,8 +836,8 @@ function click() {
     var x = coords[0], y = coords[1];
     var dx = x - o.x;
     var dy = y - o.y;
-    if (dx > (o.w / 2 - 2) || dx < (-o.w / 2 + 1) ||
-        dy > (o.h / 2 - 2) || dy < (-o.h / 2 + 1)) {
+    if (dx > (o.w / 2 - 3) || dx < (-o.w / 2 + 2) ||
+        dy > (o.h / 2 - 3) || dy < (-o.h / 2 + 2)) {
         nav({'x': x, 'y': y}, true);
         return;
     }

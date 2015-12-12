@@ -367,9 +367,9 @@ class Game(object):
     @asyncio.coroutine
     def new_player(self, client):
         player = Player(client, self)
-        while player.x is None or self.level[player.y][player.x].type_id == 'p':
-            player.x = random.randint(0, self.width - 1)
-            player.y = random.randint(0, self.height - 1)
+        while player.x is None or ptypes[self.level[player.y][player.x].type_id].layer not in ('a', 'b', 'c'):
+            player.x = random.randint(5, self.width - 5)
+            player.y = random.randint(5, self.height - 5)
         self.players.add(player)
         yield from self.send_initial(player)
         return player
