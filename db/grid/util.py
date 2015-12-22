@@ -1,4 +1,5 @@
 import random
+import math
 import noise
 box = ((8, 8), (120, 120))
 
@@ -22,6 +23,8 @@ def make_level():
         make_layer('p', width, height, threshold=maze_threshold, jitter=0, scale=32),
         make_layer('e', width, height, threshold=ground_threshold, jitter=0),
     )
+    p_layers = make_starts(p_layers, 8)
+
     p_layers, special = ensure_tunnels(p_layers, 8)
 
     treasure = False
@@ -217,6 +220,8 @@ def ensure_tunnels(layer, buff=1):
             while no_exit(x, y, cl=cl):
                 x += sx
                 y += sy
+                if layer[y * (width + 1) + x] in ('i', 'w', 'X'):
+                    break
                 if x < buff or x >= width - buff:
                     break
                 if y < buff or y >= height - buff:
@@ -264,3 +269,79 @@ def ensure_tunnels(layer, buff=1):
         for x, y in cl_pt[cl]:
             layer = set_val(layer, x, y, 's')
     return layer, special
+
+
+def make_starts(layer, buffer=0):
+    width = layer.index('\n')
+    height = layer.count('\n')
+    nx = math.floor(width / 32)
+    xspace = width / nx
+    ny = math.floor(height / 32)
+    yspace = height / ny
+    buffer += 5
+
+    def make_start(sx, sy):
+        nonlocal layer
+        x = -1
+        y = -1
+        while x < buffer or x >= width - buffer:
+            x = random.randint(sx * xspace, (sx + 1) * xspace)
+        while y < buffer or y >= height - buffer:
+            y = random.randint(sy * yspace, (sy + 1) * yspace)
+        dirs = {
+            'u': 0,
+            'd': 0,
+            'l': 0,
+            'r': 0,
+        }
+        for tx in range(x - 2, x + 3):
+            for ty in range(y - 2, y + 3):
+                if layer[ty * (width + 1) + tx] == ' ':
+                    continue
+                if tx < x:
+                    dirs['l'] += 1
+                if tx > x:
+                    dirs['r'] += 1
+                if ty < y:
+                    dirs['u'] += 1
+                if ty > y:
+                    dirs['d'] += 1
+        maxd = 0
+        for count in dirs.values():
+            if count > maxd:
+                maxd = count
+        cdirs = []
+        for dir, count in dirs.items():
+            if count == maxd:
+                cdirs.append(dir)
+        dir = random.choice(cdirs)
+        print(x, y, dir)
+        for tx in range(x - 2, x + 3):
+            for ty in range(y - 2, y + 3):
+                if tx == x - 2 or tx == x + 2 or ty == y - 2 or ty == y + 2:
+                    val = 'i'
+                elif tx == x and ty == y:
+                    val = 'X'
+                else:
+                    val = 'w'
+                layer = set_val(layer, tx, ty, val)
+        if dir == 'l':
+            layer = set_val(layer, x + 2, y, ' ')
+            layer = set_val(layer, x + 3, y, ' ')
+        elif dir == 'r':
+            layer = set_val(layer, x - 2, y, ' ')
+            layer = set_val(layer, x - 3, y, ' ')
+        elif dir == 'u':
+            layer = set_val(layer, x, y + 2, ' ')
+            layer = set_val(layer, x, y + 3, ' ')
+        elif dir == 'd':
+            layer = set_val(layer, x, y - 2, ' ')
+            layer = set_val(layer, x, y - 3, ' ')
+        else:
+            raise Exception("Unknown dir")
+
+    for sx in range(0, nx):
+        for sy in range(0, nx):
+            make_start(sx, sy)
+
+    return layer

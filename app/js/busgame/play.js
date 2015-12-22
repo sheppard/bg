@@ -14,6 +14,58 @@ return {
 
 function play(mode) {
 
+var panels = {
+    'inited': false
+};
+function showPanel(name) {
+    d3.values(panels).forEach(function(panel) {
+        if (panel.style) {
+            panel.style('display', 'none');
+            panel.visible = false;
+        }
+    });
+    panels[name].style('display', 'block');
+    panels[name].visible = true;
+}
+if (mode == 'play') {
+    panels.init = d3.select('#init-panel');
+    panels.list = d3.select('#team-list-panel');
+    panels.edit = d3.select('#team-edit-panel');
+    panels.ship = d3.select('#ship-panel');
+    showPanel('init');
+
+    panels.list.select('#add-team').on('click', function() {
+        showPanel('edit');
+    });
+    panels.edit.select('#save-team').on('click', function() {
+        var theme_id = panels.edit.selected_theme;
+        if (!theme_id) {
+            return;
+        }
+        var name = panels.edit.select('input').node().value;
+        socket.send('TEAM ' + name.replace(' ', '_') + ' ' + theme_id);
+        showPanel('list');
+    });
+    panels.list.pickTeam = function(team) {
+        socket.send('JOIN ' + team.id);
+        panels.list.selected_team = team;
+        updateShips();
+        showPanel('ship');
+    };
+    panels.ship.select('#save-ship').on('click', function() {
+        var ship_id = panels.ship.selected_ship;
+        if (!ship_id) {
+            return;
+        }
+        socket.send('SHIP ' + ship_id);
+        panels.ship.style('display', 'none');
+        startAnim(unknown);
+        d3.timer(refresh);
+    });
+}
+
+var intervals = {};
+
 var ptypes;
 app.models.pointtype.prefetch().then(function(data) {
     ptypes = {};
@@ -21,16 +73,28 @@ app.models.pointtype.prefetch().then(function(data) {
         ptype.image = new Image();
         ptype.image.src = '/media/' + ptype.path;
         ptypes[ptype.id] = ptype;
+        if (ptype.layout_id.match(/anim/)) {
+            startAnim(ptype);
+        }
         if (ptype.theme_id) {
             ptype.themes = {};
             themes.forEach(function(theme) {
                 var timg = new Image();
                 ptype.themes[theme.id] = timg;
+                timg.onload = function() {
+                    if (panels.list.visible || panels.edit.visible) {
+                        updateTeams();
+                    }
+                    if (panels.ship.visible) {
+                        updateShips();
+                    }
+                }
                 timg.src = '/media/' + theme.id + '/' + ptype.path;
             });
         }
     });
 });
+
 var themes;
 var ptheme;
 app.models.theme.load().then(function(data) {
@@ -64,13 +128,11 @@ var score = 0;
 var tileSize = 32;
 var bufferScale = 16;
 var renderSize = tileSize;
+var bgtop = (mode == 'edit' ? 50 : 0);
 var bounds = {
     'w': document.body.clientWidth,
-    'h': document.body.clientHeight
+    'h': document.body.clientHeight - bgtop
 };
-if (mode == 'edit') {
-    bounds.h -= 40;
-}
 var length = bounds.w > bounds.h ? bounds.w : bounds.h;
 while(length / renderSize > 20) {
     renderSize += tileSize;
@@ -80,15 +142,19 @@ var bg = d3.select('#play').append('div')
     .style('position', 'fixed')
     .style('width', '100%')
     .style('height', '100%')
-    .style('top', '0px')
-    .style('left', '0px')
-for (var bgx = 0; bgx <= (bounds.w / renderSize / 8); bgx++) {
-    for (var bgy = 0; bgy <= (bounds.h / renderSize / 8); bgy++) {
-        bg.append('img')
-            .attr('src', '/media/bg/0/' + scale + '/' + bgx + '/' + bgy + '.png')
-            .style('position', 'fixed')
-            .style('left', (bgx * renderSize * 8) + 'px')
-            .style('top', (bgy * renderSize * 8) + 'px')
+    .style('top', bgtop + 'px')
+    .style('left', '0px');
+
+addBackground();
+function addBackground() {
+    for (var bgx = 0; bgx <= (bounds.w / renderSize / 8); bgx++) {
+        for (var bgy = 0; bgy <= (bounds.h / renderSize / 8); bgy++) {
+            bg.append('img')
+                .attr('src', '/media/bg/0/' + scale + '/' + bgx + '/' + bgy + '.png')
+                .style('position', 'fixed')
+                .style('left', (bgx * renderSize * 8) + 'px')
+                .style('top', (bgy * renderSize * 8 + bgtop) + 'px')
+        }
     }
 }
 
@@ -97,7 +163,10 @@ var o = {};
 o.x = Math.round(Math.random() * count / 2 + count / 4);
 o.y = Math.round(Math.random() * count / 2 + count / 4);
 o.w = Math.floor(bounds.w / renderSize / 2) * 2 + 2;
-o.h = Math.floor(bounds.h / renderSize / 2) * 2 + 2;
+o.h = Math.floor(bounds.h / renderSize / 2) * 2;
+if (mode != 'edit') {
+    o.h += 2;
+}
 var last = {'x': o.x, 'y': o.y, 'w': o.w, 'h': o.h};
 var scope = {'x': o.x, 'y': o.y, 'w': 20, 'h': 20};
 var swidth = renderSize * o.w;
@@ -108,6 +177,9 @@ if (mode == 'edit') {
     stop += 40;
 }
 var grid = {};
+var teams = {};
+var teamThemes = [];
+var ships = [];
 var players = {};
 var playerId;
 
@@ -196,14 +268,30 @@ noffset.attr('x', o.x);
 noffset.attr('y', o.y);
 o.b = 1;
 
-setInterval(anim, 150);
-var frame = 0;
-function anim() {
-    frame++;
-    if (frame > 3)
-        frame = 0;
-    render();
+function startAnim(ptype) {
+    ptype.frame = 0;
+    var interval = ptype.interval || 150;
+    if (!intervals[interval]) {
+        makeInterval(interval);
+    }
+    intervals[interval].ptypes.push(ptype);
 }
+
+function makeInterval(interval) {
+    intervals[interval] = {
+        'interval': setInterval(anim, interval),
+        'ptypes': []
+    }
+    function anim() {
+        intervals[interval].ptypes.forEach(function(ptype) {
+            ptype.frame++;
+            if (ptype.frame > 3)
+                ptype.frame = 0;
+        });
+        render();
+    }
+}
+
 
 var socket = new WebSocket('ws://' + window.location.host + ':10234');
 socket.onmessage = function(msg) {
@@ -213,6 +301,29 @@ socket.onmessage = function(msg) {
 }
 
 var commands = {};
+commands['THEMES'] = function() {
+    teamThemes = Array.prototype.slice.call(arguments);
+    if (panels.list.visible || panels.edit.visible) {
+        updateTeams();
+    }
+    if (!panels.inited) {
+        showPanel('list');
+        panels.inited = true;
+    }
+}
+commands['SHIPS'] = function() {
+    ships = Array.prototype.slice.call(arguments);
+}
+commands['TEAM'] = function(id, name, theme_id, score) {
+    var team = teams[id] || {};
+    team.id = id;
+    team.name = name;
+    team.theme_id = theme_id;
+    team.score = score;
+    teams[id] = team;
+    updateTeams();
+}
+
 commands['GRID'] = function(level) {
     var rows = level.split('\n');
     // width = rows[0].length;
@@ -237,11 +348,11 @@ commands['POINT'] = function(x, y, type, theme, orientation) {
     pt.x = +x;
     pt.y = +y;
     pt.type_id = type;
-    pt.theme_id = +theme;
+    pt.theme_id = theme;
     pt.orientation = orientation;
 }
 
-commands['PLAYER'] = function(pid, type, theme, x, y, assign) {
+commands['PLAYER'] = function(pid, theme, type, x, y, assign) {
     if (mode != 'play') {
          return;
     }
@@ -256,6 +367,9 @@ commands['PLAYER'] = function(pid, type, theme, x, y, assign) {
         nav(player);
     }
     players[pid] = player;
+    if (panels.ship.visible) {
+        updateShips();
+    }
 };
 commands['PROJECTILE'] = function(pid, type, x, y, direction, destroy) {
     if (mode != 'play') {
@@ -398,15 +512,7 @@ function updateFrame() {
             } else {
                 coords = player.target || player;
                 if (player.is_proj) {
-                     player.type_id = player.destroy_type_id;
-                     player.frame = 0;
-                     player.destroy = setInterval(function() {
-                         player.frame++;
-                         if (player.frame > 3) {
-                              clearInterval(player.destroy);
-                              delete players[player.id];
-                         }
-                     }, 150);
+                     explode(player);
                 }
                 player.path = null;
                 player.target = null;
@@ -458,7 +564,18 @@ function updateFrame() {
     }
 }
 
-d3.timer(refresh);
+function explode(player) {
+   player.type_id = player.destroy_type_id;
+   player.frame = 0;
+   player.destroy = setInterval(function() {
+       player.frame++;
+       if (player.frame > 3) {
+            clearInterval(player.destroy);
+            delete players[player.id];
+       }
+   }, 150);
+}
+
 function refresh() {
     var buffers = _getBuffers(_getViewport());
     context.clearRect(0, 0, swidth, sheight);
@@ -505,9 +622,13 @@ function drawPlayers(under, proj) {
 }
 function drawPlayer(player) {
     var ptype = ptypes[player.type_id];
+    var img = ptype.image;
+    if (player.theme_id && ptype.themes) {
+        img = ptype.themes[player.theme_id];
+    }
     var tileOffset = _tileXY(player);
     context.drawImage(
-        ptype.image,
+        img,
         tileOffset.x * tileSize,
         tileOffset.y * tileSize,
         tileSize,
@@ -715,13 +836,13 @@ function _getBuffers(viewport) {
 
 var _variant = {};
 function _tileXY(d) {
-    var type = ptypes[d.type_id] || unknown;
+    var ptype = ptypes[d.type_id] || unknown;
     // Simple tiles
-    if (!type || type.layout_id == 'tile-1')
+    if (!ptype || ptype.layout_id == 'tile-1')
         return {'x': 0, 'y': 0};
 
     // Random alternating tiles
-    if (type.layout_id == 'alt-4') {
+    if (ptype.layout_id == 'alt-4') {
         var key = d.x + ',' + d.y;
         if (!_variant[key]) {
             var dx = Math.random() < 0.5 ? 0 : 1;
@@ -732,8 +853,8 @@ function _tileXY(d) {
     }
 
     // Directional and/or animated tiles
-    var isdir = type.layout_id.match(/dir/);
-    var isanim = type.layout_id.match(/anim/);
+    var isdir = ptype.layout_id.match(/dir/);
+    var isanim = ptype.layout_id.match(/anim/);
     if (isdir || isanim) {
         var x = 0, y = 0;
         if (isdir) {
@@ -743,7 +864,7 @@ function _tileXY(d) {
             if (d.frame !== undefined) {
                 x = d.frame;
             } else {
-                x = frame;
+                x = ptype.frame || 0;
             }
         }
         return {'x': x, 'y': y};
@@ -944,6 +1065,125 @@ function handleClick(x, y) {
     } else {
         socket.send('GO ' + x + ' ' + y);
     }
+}
+
+var themeImgs = {};
+function themeImg(type_id, theme_id) {
+    if (themeImgs[type_id + ':' + theme_id]) {
+        return themeImgs[type_id + ':' + theme_id];
+    }
+    var img = ptypes && ptypes[type_id] && ptypes[type_id].themes && ptypes[type_id].themes[theme_id];
+    if (!img || !img.complete) {
+        return '';
+    }
+    var tcanvas = document.createElement('canvas');
+    tcanvas.width = tcanvas.height = renderSize;
+    var tcontext = tcanvas.getContext('2d');
+    tcontext.webkitImageSmoothingEnabled = false;
+    tcontext.mozImageSmoothingEnabled = false;
+    tcontext.imageSmoothingEnabled = false;
+    tcontext.drawImage(
+        img,
+        0,
+        0,
+        tileSize,
+        tileSize,
+        0,
+        0,
+        renderSize,
+        renderSize
+    );
+    var data = tcanvas.toDataURL('image/png');
+    themeImgs[type_id + ':' + theme_id] = data;
+    return data;
+}
+
+function btnStyle(sel) {
+    sel.style('cursor', 'pointer')
+       .style('margin', (4 / tileSize * renderSize) + 'px')
+       .style('padding', (4 / tileSize * renderSize) + 'px')
+       .style('border', (4 / tileSize * renderSize) + 'px solid transparent')
+       .style('border-radius', (6 / tileSize * renderSize) + 'px');
+}
+
+function updateTeams() {
+    var items = panels.list.select('ul').selectAll('li.team').data(
+        d3.values(teams), function(d) { return d.id }
+    );
+    var enter = items.enter().append('li')
+       .attr('class', 'team')
+    enter.append('img')
+        .style('vertical-align', 'middle')
+    enter.append('h3')
+        .style('display', 'inline')
+        .style('vertical-align', 'middle')
+        .style('font-size', (renderSize * 0.8) + 'px')
+        .style('margin-left', '1em');
+    items.select('h3').text(function(d) {
+        return d.name.replace('_', ' ');
+    });
+    items.select('img').attr('src', function(d) {
+        return themeImg('i', d.theme_id);
+    });
+    items.on('click', panels.list.pickTeam);
+    var unusedThemes = [];
+    teamThemes.forEach(function(theme_id) {
+        var found = false;
+        d3.values(teams).forEach(function(team) {
+            if (team.theme_id == theme_id) {
+                found = true;
+            }
+        });
+        if (!found) {
+            unusedThemes.push({
+                'id': theme_id,
+                'image': themeImg('i', theme_id)
+            });
+        }
+    });
+
+    var imgs = panels.edit.select('#theme-choices').selectAll('img').data(
+        unusedThemes, function(d) { return d.id }
+    );
+    btnStyle(imgs.enter().append('img'));
+    imgs.attr('src', function(d) { return d.image });
+    imgs.on('click', function(d) {
+        panels.edit.selected_theme = d.id;
+        imgs.style('border-color', 'transparent');
+        d3.select(this).style('border-color', 'white');
+    });
+    imgs.exit().remove();
+}
+
+function updateShips() {
+    var unusedShips = [];
+    ships.forEach(function(type_id) {
+        var found = false;
+        for (var pid in players) {
+            var player = players[pid];
+            if (player.theme_id == panels.list.selected_team.theme_id
+                && player.type_id == type_id) {
+                found = true;
+            }
+        }
+        if (!found) {
+            unusedShips.push({
+                'id': type_id,
+                'image': themeImg(type_id, panels.list.selected_team.theme_id)
+            });
+        }
+    });
+    imgs = panels.ship.select('#ship-choices').selectAll('img').data(
+        unusedShips, function(d) { return d.id}
+    );
+    btnStyle(imgs.enter().append('img'))
+    imgs.attr('src', function(d) { return d.image });
+    imgs.on('click', function(d) {
+        panels.ship.selected_ship = d.id;
+        imgs.style('border-color', 'transparent');
+        d3.select(this).style('border-color', 'white');
+    });
+    imgs.exit().remove();
 }
 
 };

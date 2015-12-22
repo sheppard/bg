@@ -15,7 +15,10 @@ rest.router.register_model(
     lookup='code',
 )
 
-rest.router.register_model(Theme)
+rest.router.register_model(
+    Theme,
+    lookup='code'
+)
 rest.router.register_model(
     Layout,
     serializer=LayoutSerializer,

@@ -19,10 +19,18 @@ class PointTypeIO(JsonNetIO):
     url = "http://%s/pointtypes.json" % os.environ['BG_HOST']
     namespace = "list"
 
+class ThemeIO(JsonNetIO):
+    url = "http://%s/themes.json" % os.environ['BG_HOST']
+    namespace = "list"
 
 ptypes = {}
 for ptype in PointTypeIO():
     ptypes[ptype.code] = ptype
+
+
+themes = {}
+for theme in ThemeIO():
+    themes[theme.code] = theme
 
 
 class Point(object):
@@ -48,15 +56,38 @@ class Point(object):
         return s
 
 
+class Team(object):
+    count = 0
+
+    def __init__(self, game, name, theme_id):
+        self.game = game
+        self.name = name
+        self.theme_id = theme_id
+        Team.count += 1
+        self.id = Team.count
+        self.players = set()
+        self.starts = set()
+        self.score = 0
+
+    def to_str(self):
+        return "TEAM %s %s %s %s" % (
+            self.id, self.name.replace(' ', '_'), self.theme_id, self.score
+        )
+
+    def add_player(self, player):
+        self.players.add(player)
+
+
 class Player(object):
+    active = False
     count = 0
 
     x = None
     y = None
     type_id = None
-    theme_id = None
     target_x = None
     target_y = None
+    team = None
     plan = {}
 
     def __init__(self, client, game):
@@ -64,8 +95,15 @@ class Player(object):
         self.game = game
         Player.count += 1
         self.id = Player.count
-        self.type_id = str(self.id % 5)
-        self.theme_id = str(self.id % 5)
+
+    @asyncio.coroutine
+    def send(self, message):
+        if self.client.open:
+            yield from self.client.send(message)
+
+    @property
+    def theme_id(self):
+        return self.team and self.team.theme_id
 
     def to_str(self):
         return "PLAYER %s %s %s %s %s" % (
@@ -81,23 +119,37 @@ class Player(object):
 
     @asyncio.coroutine
     def tick(self, frame):
+        if not self.active:
+            return
         self.x, self.y = self.get_plan(frame)[0]
         if self.x == self.target_x and self.y == self.target_y:
             self.plan = {}
             self.target_x = None
             self.target_y = None
-        ptype = ptypes[self.game.level[self.y][self.x].type_id]
+        pt = self.game.level[self.y][self.x]
+        ptype = ptypes[pt.type_id]
         if ptype.layer == 'c' and ptype.replace_with_id:
             yield from self.game.process_point(
                 self, self.x, self.y, ptype.replace_with_id, self.theme_id,
             )
+        elif pt.type_id == 'X' and pt.theme_id == '金':
+            for x in range(self.x - 2, self.x + 3):
+               for y in range(self.y - 2, self.y + 3):
+                   pt = self.game.level[y][x]
+                   yield from self.game.process_point(
+                       self, pt.x, pt.y, pt.type_id, self.theme_id, pt.orientation
+                   )
 
     def set_target(self, frame, tx, ty):
         if self.target_x == tx and self.target_y == ty:
             return False
         lx, ly = self.x, self.y
+        if self.game.level[ly][lx].type_id == 'X' and self.game.level[ty][tx].type_id == 'X':
+            path = [(lx, ly), (tx, ty)]
+        else:
+
+            path = self.game.find_path((lx, ly), (tx, ty))
         self.plan = {}
-        path = self.game.find_path((lx, ly), (tx, ty))
         if path:
             self.target_x, self.target_y = path[-1]
         for step in path:
@@ -201,9 +253,11 @@ class Game(object):
         self.width = level_str.index('\n')
         self.height = level_str.count('\n')
         self.level = []
+        self.teams = set()
         self.players = set()
         self.projectiles = set()
         self.graph = Graph()
+        self.starts = set()
 
         for y in range(0, self.height):
             row = []
@@ -213,12 +267,14 @@ class Game(object):
                     x=x,
                     y=y,
                     type_id=type_id,
-                    theme_id=None,
+                    theme_id=('金' if type_id in 'iwX' else None),
                     orientation=None
                 ))
             self.level.append(row)
 
         for pt in self.all_points:
+            if pt.type_id == 'X':
+                self.starts.add(pt)
             self.set_node(pt)
 
     def set_node(self, pt):
@@ -226,7 +282,9 @@ class Game(object):
         if ptype.layer == 'e':
             cost = 50
         elif ptype.layer == 'd':
-            cost = 5
+            cost = 6
+        elif ptype.layer == 'c':
+            cost = 0.99
         else:
             cost = 1
         neighbors = []
@@ -336,12 +394,9 @@ class Game(object):
             return
         vals = data.split(" ")
         cmd, args = vals[0], vals[1:]
-        if cmd == "POINT":
-            yield from self.process_point(player, *args)
-        elif cmd == "GO":
-            yield from self.process_go(player, *args)
-        elif cmd == "FIRE":
-            yield from self.process_fire(player, *args)
+        fn = getattr(self, 'process_%s' % cmd.lower(), None)
+        if fn:
+            yield from fn(player, *args)
 
     @asyncio.coroutine
     def process_point(self, player, x, y, type_id, theme_id=None, orientation=None):
@@ -362,21 +417,48 @@ class Game(object):
         print(msg)
         for player in self.players:
             print("Sending to Player ", player.id)
-            yield from player.client.send(msg)
+            yield from player.send(msg)
 
     @asyncio.coroutine
     def new_player(self, client):
         player = Player(client, self)
-        while player.x is None or ptypes[self.level[player.y][player.x].type_id].layer not in ('a', 'b', 'c'):
-            player.x = random.randint(5, self.width - 5)
-            player.y = random.randint(5, self.height - 5)
         self.players.add(player)
-        yield from self.send_initial(player)
+
+        tstr = "THEMES"
+        for theme_id, theme in themes.items():
+            if not theme.elemental:
+                tstr += " %s" % theme_id
+        yield from player.send(tstr)
+
+        sstr = "SHIPS"
+        for type_id, ptype in ptypes.items():
+            if type_id.isdigit():
+                sstr += " %s" % type_id
+        yield from player.send(sstr)
+
+        for team in self.teams:
+            yield from player.send(team.to_str())
+
+        for pl in self.players:
+            if not pl.active:
+                continue
+            yield from player.send(pl.to_str())
+
         return player
+
+    def start_player(self, player):
+        start = None
+        while start is None or start.theme_id != '金':
+            start = random.choice(list(self.starts))
+        player.active = True
+        player.x = start.x
+        player.y = start.y
+        yield from self.send_initial(player)
 
     @asyncio.coroutine
     def remove_player(self, player):
-        self.players.remove(player)
+        if player in self.players:
+            self.players.remove(player)
 
     @asyncio.coroutine
     def process_fire(self, player, direction):
@@ -386,18 +468,43 @@ class Game(object):
         yield from self.broadcast(proj.path_str(self.frame))
 
     @asyncio.coroutine
+    def process_team(self, player, name, theme_id):
+        for team in self.teams:
+            if team.theme_id == theme_id:
+                return
+        team = Team(self, name, theme_id)
+        self.teams.add(team)
+        yield from self.broadcast(team.to_str())
+
+    @asyncio.coroutine
+    def process_join(self, player, team_id):
+        for team in self.teams:
+            if str(team.id) == team_id:
+                team.add_player(player)
+                player.team = team
+
+        if not player.team:
+            raise Exception("Failed to find team")
+
+    @asyncio.coroutine
+    def process_ship(self, player, ship_id):
+        player.type_id = ship_id
+        yield from self.start_player(player)
+
+    @asyncio.coroutine
     def remove_projectile(self, projectile):
         self.projectiles.remove(projectile)
 
     @asyncio.coroutine
     def send_initial(self, player):
-        yield from player.client.send(self.to_str())
-        yield from player.client.send(player.to_str() + " 1")
-        yield from player.client.send("TICK %s" % self.frame)
+        yield from player.send(self.to_str())
+        yield from player.send(player.to_str() + " 1")
+        yield from player.send("TICK %s" % self.frame)
         for pt in self.all_points:
             if pt.theme_id or pt.orientation:
-                 yield from player.client.send(pt.to_str())
+                 yield from player.send(pt.to_str())
         for pl in self.players:
-            yield from player.client.send(pl.to_str())
-            yield from player.client.send(pl.path_str(self.frame))
+            if not pl.active:
+                continue
+            yield from player.send(pl.path_str(self.frame))
         yield from self.broadcast(player.to_str())

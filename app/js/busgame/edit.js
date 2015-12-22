@@ -14,6 +14,7 @@ function edit(id) {
 var $page = $.mobile.activePage;
 var red = 0, blue = 0, green = 0, alpha = 255;
 var write = true;
+var brush = 0;
 
 $page.find('button#pick-color').click(function() {
     write = false;
@@ -209,28 +210,47 @@ function copyVariant(v) {
         tileSize,
         tileSize
     );
+    paste(v.x, v.y);
+}
+
+function paste(tx, ty) {
     imageContext.drawImage(
         scratch,
         0,
         0,
         tileSize,
         tileSize,
-        v.x * tileSize,
-        v.y * tileSize,
+        tx * tileSize,
+        ty * tileSize,
         tileSize,
         tileSize
     );
 }
 
 $page.find('button#mirror-ltr').click(function() {
-    imageContext.save();
-    imageContext.scale(-1, 1);
-    imageContext.drawImage(
+    scratchContext.save();
+    scratchContext.clearRect(0, 0, tileSize, tileSize);
+    scratchContext.scale(-1, 1);
+    scratchContext.drawImage(
        image,
-       0, 0, tileSize / 2, tileSize,
+       variant.x * tileSize, variant.y * tileSize, tileSize / 2, tileSize,
        -tileSize, 0, tileSize / 2, tileSize
     );
-    imageContext.restore();
+    scratchContext.restore();
+    paste(variant.x, variant.y);
+    update();
+});
+$page.find('button#mirror-ttb').click(function() {
+    scratchContext.save();
+    scratchContext.clearRect(0, 0, tileSize, tileSize);
+    scratchContext.scale(1, -1);
+    scratchContext.drawImage(
+       image,
+       variant.x * tileSize, variant.y * tileSize, tileSize, tileSize / 2,
+       0, -tileSize, tileSize, tileSize / 2
+    );
+    scratchContext.restore();
+    paste(variant.x, variant.y);
     update();
 });
 var $variant = $page.find('input[name=variant]')
@@ -242,6 +262,10 @@ $variant.click(function() {
         }
     });
     update();
+});
+var $brush = $page.find('input[name=brush]')
+$brush.click(function() {
+    brush = +($brush.filter(':checked').val());
 });
 
 function initImage() {
@@ -263,6 +287,36 @@ function click() {
         updateColor();
         return;
     }
+    if (brush == 0) {
+        put(x, y);
+    } else if (brush == 1) {
+        for (var px = x - 1; px <= x + 1; px++) {
+            for (var py = y - 1; py <= y + 1; py++) {
+                put(px, py);
+            }
+        }
+    } else if (brush == 2) {
+        for (var px = x - 2; px <= x + 2; px++) {
+            for (var py = y - 2; py <= y + 2; py++) {
+                if (px % 2 == py % 2) {
+                    put(px, py);
+                }
+            }
+        }
+    }
+    layout.variants.forEach(function(v) {
+        if (v.transform_source_id == variant.id) {
+            copyVariant(v); 
+        }
+    });
+    update();
+}
+
+function put(x, y) {
+    if (x < variant.x * tileSize || x >= (variant.x + 1) * tileSize)
+        return;
+    if (y < variant.y * tileSize || y >= (variant.y + 1) * tileSize)
+        return;
     var pixel = imageContext.createImageData(1, 1);
     var p = pixel.data;
     p[0] = red;
@@ -270,12 +324,6 @@ function click() {
     p[2] = blue;
     p[3] = alpha;
     imageContext.putImageData(pixel, x, y);
-    layout.variants.forEach(function(v) {
-        if (v.transform_source_id == variant.id) {
-            copyVariant(v); 
-        }
-    });
-    update();
 }
 
 });

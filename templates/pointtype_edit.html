@@ -39,6 +39,11 @@
               <p class="error pointtype-layout_id-errors"></p>
             </li>
             <li>
+              <label for="interval">Interval</label>
+              <input name="interval" id="interval" type="tel" value="{{interval}}">
+              <p class="error pointtype-interval-errors"></p>
+            </li>
+            <li>
               <label for="layer">Layer</label>
               <select id="layer" name="layer">
                 <option value="">Select one...</option>
@@ -105,6 +110,15 @@
             {{/has_variants}}
             {{/layout}}
             <li>
+              <fieldset data-role="controlgroup" data-type="horizontal"
+                  data-mini="true" style="float:right">
+                <label for=brush0>&#9642;</label>
+                <input type=radio name=brush id=brush0 value=0 checked>
+                <label for=brush1>&#11035;</label>
+                <input type=radio name=brush id=brush1 value=1>
+                <label for=brush2>&#x2592;</label>
+                <input type=radio name=brush id=brush2 value=2>
+              </fieldset>
               <input
                  data-role="none"
                  id="current-color"
@@ -135,6 +149,7 @@
             </li>
             <li>
               <button type="button" id="mirror-ltr" data-icon="arrow-r" data-iconpos="notext" data-inline="true"></button>
+              <button type="button" id="mirror-ttb" data-icon="arrow-d" data-iconpos="notext" data-inline="true"></button>
             <li>
             {{/id}}
             <li>

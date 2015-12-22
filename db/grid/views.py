@@ -37,7 +37,7 @@ def generate_theme(request, theme, image):
     img = Image.open(pt.path)
     theme_id = theme
     if theme != '0':
-        theme = Theme.objects.get(pk=theme)
+        theme = Theme.objects.get(code=theme)
         theme_id = str(theme.pk)
 
     if pt.theme is not None:

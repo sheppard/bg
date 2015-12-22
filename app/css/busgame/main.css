@@ -36,3 +36,28 @@
     width: 16px;
     height: 16px;
 }
+.panel {
+    display: none;
+    background-color: rgba(30, 30, 60, 0.9);
+    border: 3px solid rgba(30, 30, 60, 0.95);
+    border-radius: 5%;
+    position: fixed;
+    left: 5%;
+    right: 5%;
+    top: 5%;
+    bottom: 5%;
+    padding: 5%;
+    overflow-y: auto;
+    z-index: 1001;
+}
+
+ul#teams {
+    padding: 0px;
+}
+li.team {
+    list-style: none;
+    padding: 1em;
+    border: 1px solid white;
+    border-radius: 1em;
+    cursor: pointer;
+}

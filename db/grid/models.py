@@ -5,6 +5,8 @@ from matplotlib.colors import hex2color
 
 class Theme(models.Model):
     name = models.CharField(max_length=40)
+    code = models.CharField(max_length=1, unique=True)
+    elemental = models.BooleanField(default=False)
     primary1 = models.CharField(max_length=7)
     primary2 = models.CharField(max_length=7)
     primary3 = models.CharField(max_length=7)
@@ -69,6 +71,7 @@ class PointType(NaturalKeyModel):
     value = models.IntegerField(default=0)
     path = models.FileField(upload_to="sprites")
     layout = models.ForeignKey(Layout, null=True, blank=True)
+    interval = models.IntegerField(null=True, blank=True)
     layer = models.CharField(
         max_length=1,
         choices=LAYER_CHOICES,

@@ -19,9 +19,19 @@
           {{/id}}
           <ul data-role="listview">
             <li>
+              <label for="code">Code</label>
+              <input name="code" id="code" value="{{code}}">
+              <p class="error theme-code-errors"></p>
+            </li>
+            <li>
               <label for="name">Name</label>
               <input name="name" id="name" value="{{name}}">
               <p class="error theme-name-errors"></p>
+            </li>
+            <li>
+              <input type="checkbox" value="t" name="elemental" id="elemental"{{#elemental}} checked{{/elemental}}>
+              <label for="elemental">Elemental</label>
+              <p class="error theme-elemental-errors"></p>
             </li>
             <li data-role="list-divider">Primary</li>
             <li>
