@@ -68,15 +68,29 @@ class Team(object):
         self.players = set()
         self.starts = set()
         self.score = 0
+        self.score_message = False
 
     def to_str(self):
         return "TEAM %s %s %s %s" % (
             self.id, self.name.replace(' ', '_'), self.theme_id, self.score
         )
 
+    def score_str(self):
+        return "SCORE %s %s" % (self.id, self.score)
+
     def add_player(self, player):
         self.players.add(player)
 
+    @asyncio.coroutine
+    def add_score(self, score):
+        self.score += score
+        yield from self.game.broadcast(self.score_str())
+        if self.score >= len(self.players) * 10000 and not self.score_message:
+            self.score_message = True
+            yield from self.game.broadcast(
+                "MESSAGE Team %s achieved a score of %s" %
+                (self.name or self.id, self.score)
+            )
 
 class Player(object):
     active = False
@@ -84,6 +98,9 @@ class Player(object):
 
     x = None
     y = None
+    name = None
+    hp = 0
+    lives = 0
     type_id = None
     target_x = None
     target_y = None
@@ -105,17 +122,53 @@ class Player(object):
     def theme_id(self):
         return self.team and self.team.theme_id
 
-    def to_str(self):
-        return "PLAYER %s %s %s %s %s" % (
-            self.id, self.theme_id, self.type_id, self.x, self.y
+    def to_str(self, assign=False):
+        res = "PLAYER %s %s %s %s %s %s %s %s" % (
+            self.id, self.team.id, self.name, self.type_id,
+            self.x, self.y, self.lives, self.hp
         )
+        if assign:
+            res += " 1"
+        return res
 
     def path_str(self, frame):
         plan = self.get_plan(frame)
         s = "PATH %s" % self.id
         for f, (x, y) in enumerate(plan):
-             s += " %s:%s,%s" % ((frame + f) % 1000, x, y)
+            s += " %s:%s,%s" % ((frame + f) % 1000, x, y)
         return s
+
+    def hp_str(self):
+        return "HP %s %s" % (self.id, self.hp)
+
+    def lives_str(self):
+        return "LIVES %s %s" % (self.id, self.lives)
+
+    @asyncio.coroutine
+    def game_over(self):
+        yield from self.game.broadcast(self.hp_str())
+        yield from self.game.broadcast(self.lives_str())
+        yield from self.game.broadcast("GAMEOVER %s" % self.id)
+        self.active = False
+        self.x = -1000
+        self.y = -1000
+
+    @asyncio.coroutine
+    def add_hp(self, hp):
+        self.hp += hp
+        if self.hp == 0:
+            self.lives -= 1
+            yield from self.game.process_point(
+                self, self.x, self.y, self.type_id, '金'
+            )
+            if self.lives == 0:
+                yield from self.game_over()
+            else:
+                self.hp = 10
+                self.game.locate_player(self)
+                yield from self.game.broadcast(self.to_str())
+                yield from self.send(self.to_str(True))
+        yield from self.game.broadcast(self.hp_str())
 
     @asyncio.coroutine
     def tick(self, frame):
@@ -129,22 +182,34 @@ class Player(object):
         pt = self.game.level[self.y][self.x]
         ptype = ptypes[pt.type_id]
         if ptype.layer == 'c' and ptype.replace_with_id:
+            yield from self.team.add_score(ptype.value)
+            if pt.type_id == 'j':
+                yield from self.add_hp(1)
             yield from self.game.process_point(
                 self, self.x, self.y, ptype.replace_with_id, self.theme_id,
             )
         elif pt.type_id == 'X' and pt.theme_id == '金':
+            self.team.starts.add(pt)
+            yield from self.team.add_score(500)
             for x in range(self.x - 2, self.x + 3):
                for y in range(self.y - 2, self.y + 3):
                    pt = self.game.level[y][x]
                    yield from self.game.process_point(
                        self, pt.x, pt.y, pt.type_id, self.theme_id, pt.orientation
                    )
+        elif pt.type_id in ('iwX') and frame % 50 == 0:
+            if pt.theme_id == self.theme_id and self.hp < 10:
+                yield from self.add_hp(1)
+            elif pt.theme_id not in (self.theme_id, '金'):
+                yield from self.add_hp(-1)
 
     def set_target(self, frame, tx, ty):
         if self.target_x == tx and self.target_y == ty:
             return False
         lx, ly = self.x, self.y
-        if self.game.level[ly][lx].type_id == 'X' and self.game.level[ty][tx].type_id == 'X':
+        lpt = self.game.level[ly][lx]
+        tpt = self.game.level[ty][tx]
+        if lpt.type_id == 'X' and tpt.type_id == 'X' and lpt.theme_id == self.theme_id and tpt.theme_id == self.theme_id:
             path = [(lx, ly), (tx, ty)]
         else:
 
@@ -385,8 +450,26 @@ class Game(object):
                 yield from self.broadcast("TICK %s" % self.frame)
         for player in list(self.players):
             yield from player.tick(self.frame)
+            for proj in list(self.projectiles):
+                yield from self.check_collide(proj, player)
         for proj in list(self.projectiles):
             yield from proj.tick(self.frame)
+            for proj2 in list(self.projectiles):
+                yield from self.check_collide(proj2, proj)
+            for player in list(self.players):
+                yield from self.check_collide(proj, player)
+
+    @asyncio.coroutine
+    def check_collide(self, proj, obj):
+        if proj.x != obj.x or proj.y != obj.y or proj.id == obj.id:
+            return
+        if isinstance(obj, Player) and proj.player.id == obj.id:
+            return
+        yield from self.remove_projectile(proj)
+        if isinstance(obj, Projectile):
+            yield from self.remove_projectile(obj)
+        else:
+            yield from obj.add_hp(-1)
 
     @asyncio.coroutine
     def process(self, player, data):
@@ -447,13 +530,49 @@ class Game(object):
         return player
 
     def start_player(self, player):
-        start = None
-        while start is None or start.theme_id != '金':
-            start = random.choice(list(self.starts))
         player.active = True
-        player.x = start.x
-        player.y = start.y
+        self.locate_player(player, initial=True)
+        player.hp = 10
+        player.lives = 3
         yield from self.send_initial(player)
+
+    def locate_player(self, player, initial=False):
+        if not initial:
+            tx = player.x
+            ty = player.y
+            choices = player.team.starts
+        else:
+            if len(player.team.starts) == 0:
+                ty = 0
+                if player.team.id == 1:
+                    tx = 0
+                elif player.team.id == 2:
+                    tx = self.width
+                elif player.team.id == 3:
+                    tx = self.width / 2
+                else:
+                    tx = random.randint(0, self.width)
+            else:
+                tx = 0
+                ty = 0
+                for start in player.team.starts:
+                    tx += start.x
+                    ty += start.y
+                tx /= len(player.team.starts)
+                ty /= len(player.team.starts)
+
+            choices = []
+            for i in range(0, int(len(self.starts) / 2)):
+                start = None
+                while start is None or start.theme_id != '金':
+                    start = random.choice(list(self.starts))
+                choices.append(start)
+        choices = sorted(
+            choices,
+            key=lambda pt: abs(pt.x - tx) + abs(pt.y - ty)
+        )
+        player.x = choices[0].x
+        player.y = choices[0].y
 
     @asyncio.coroutine
     def remove_player(self, player):
@@ -487,18 +606,20 @@ class Game(object):
             raise Exception("Failed to find team")
 
     @asyncio.coroutine
-    def process_ship(self, player, ship_id):
+    def process_ship(self, player, ship_id, name):
         player.type_id = ship_id
+        player.name = name
         yield from self.start_player(player)
 
     @asyncio.coroutine
     def remove_projectile(self, projectile):
-        self.projectiles.remove(projectile)
+        if projectile in self.projectiles:
+            self.projectiles.remove(projectile)
 
     @asyncio.coroutine
     def send_initial(self, player):
         yield from player.send(self.to_str())
-        yield from player.send(player.to_str() + " 1")
+        yield from player.send(player.to_str(True))
         yield from player.send("TICK %s" % self.frame)
         for pt in self.all_points:
             if pt.theme_id or pt.orientation:

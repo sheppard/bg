@@ -57,7 +57,8 @@ if (mode == 'play') {
         if (!ship_id) {
             return;
         }
-        socket.send('SHIP ' + ship_id);
+        var name = panels.ship.select('input').node().value;
+        socket.send('SHIP ' + ship_id + ' ' + name.replace(' ', '_'));
         panels.ship.style('display', 'none');
         startAnim(unknown);
         d3.timer(refresh);
@@ -123,7 +124,6 @@ var dirIndex = {
 }
 
 var jumps = 1;
-var score = 0;
 
 var tileSize = 32;
 var bufferScale = 16;
@@ -182,14 +182,15 @@ var teamThemes = [];
 var ships = [];
 var players = {};
 var playerId;
+var buffer = 8;
 
 function nav(d, anim) {
     o.x = d.x;
     o.y = d.y;
-    if (o.x < 0) o.x = 0;
-    if (o.y < 0) o.y = 0;
-    if (o.x > count) o.x = count;
-    if (o.y > count) o.y = count;
+    if (o.x < buffer) o.x = buffer;
+    if (o.y < buffer) o.y = buffer;
+    if (o.x > count - buffer) o.x = count - buffer;
+    if (o.y > count - buffer) o.y = count - buffer;
     if (Math.abs(scope.x - o.x) > 3 || Math.abs(scope.y - o.y) > 3) {
         scope.x = Math.round(o.x);
         scope.y = Math.round(o.y);
@@ -317,11 +318,18 @@ commands['SHIPS'] = function() {
 commands['TEAM'] = function(id, name, theme_id, score) {
     var team = teams[id] || {};
     team.id = id;
-    team.name = name;
+    team.name = name.replace('_', ' ') || 'Team ' + id;
     team.theme_id = theme_id;
     team.score = score;
     teams[id] = team;
     updateTeams();
+}
+commands['SCORE'] = function(id, score) {
+    var team = teams[id] || {};
+    team.id = id;
+    team.score = score;
+    teams[id] = team;
+    updateScore();
 }
 
 commands['GRID'] = function(level) {
@@ -352,25 +360,78 @@ commands['POINT'] = function(x, y, type, theme, orientation) {
     pt.orientation = orientation;
 }
 
-commands['PLAYER'] = function(pid, theme, type, x, y, assign) {
+commands['PLAYER'] = function(pid, team, name, type, x, y, lives, hp, assign) {
     if (mode != 'play') {
          return;
     }
     var player = players[pid] || {};
     player.id = pid;
+    player.team_id = team;
+    player.name = name.replace('_', ' ') || 'Player ' + pid;
     player.type_id = type;
-    player.theme_id = theme;
     player.x = +x;
     player.y = +y;
+    var hit = player.lives > +lives;
+    player.lives = +lives;
+    player.hp = +hp;
+    players[pid] = player;
     if (assign) {
         playerId = pid;
         nav(player);
+        updateScore();
     }
-    players[pid] = player;
+    if (hit) {
+        showMessage(player.name + " took a hit");
+    } else if (!messageVisible) {
+        showMessage(player.name + " has joined team " + teams[player.team_id].name);
+    }
     if (panels.ship.visible) {
         updateShips();
     }
 };
+commands['HP'] = function(pid, hp) {
+    var player = players[pid] || {};
+    player.id = pid;
+    if (+hp < player.hp) {
+        player.temp_theme_id = '火';
+    } else {
+        player.temp_theme_id = '木';
+    }
+    if (hp < 3 && !player.warning) {
+        player.warning = setInterval(function() {
+            if (player.temp_theme_id) {
+                player.temp_theme_id = null;
+            } else {
+                player.temp_theme_id = '火';
+            }
+        }, 500);
+    } else {
+        clearInterval(player.warning);
+        player.warning = null;
+        setTimeout(function() {
+            player.temp_theme_id = null;
+        }, 500);
+    }
+    player.hp = +hp;
+    players[pid] = player;
+    updateScore();
+}
+commands['LIVES'] = function(pid, lives) {
+    var player = players[pid] || {};
+    player.id = pid;
+    player.lives = +lives;
+    players[pid] = player;
+    updateScore();
+}
+commands['GAMEOVER'] = function(pid) {
+    var name = players[pid].name || 'Player ' + pid;
+    delete players[pid];
+    showMessage("Game over for " + name);
+}
+commands['MESSAGE'] = function() {
+    var message = Array.prototype.slice.call(arguments).join(" ");
+    showMessage(message);
+}
 commands['PROJECTILE'] = function(pid, type, x, y, direction, destroy) {
     if (mode != 'play') {
          return;
@@ -456,7 +517,7 @@ commands['TICK'] = function(f) {
         interval = 150;
     }
 
-    d3.select('#score').text(Math.round(interval * 10000) / 10000);
+    // d3.select('#score').text(Math.round(interval * 10000) / 10000);
     updateFrame();
     ticker = setInterval(tick, interval / 4);
 }
@@ -479,7 +540,7 @@ function tick() {
     }
     tickFrame += 0.25;
     tickFrame = tickFrame % 1000;
-    d3.select('#loc').text(Math.floor(tickFrame));
+    // d3.select('#loc').text(Math.floor(tickFrame));
     updateFrame();
 }
 function updateFrame() {
@@ -558,6 +619,14 @@ function updateFrame() {
                 player.moving--;
             }
         }
+        if (t1 == tickFrame && player.moving) {
+             for (var pid2 in players) {
+                  var player2 = players[pid2];
+                  if (player.x == player2.x && player.y == player2.y && player.id != player2.id && (player.orientation != player2.orientation || !!player.moving != !!player2.moving)) {
+                       collide(player, player2);
+                  }
+             }
+        }
         if (ptype) {
             player.under = (ptype.layer == 'a');
         }
@@ -565,6 +634,9 @@ function updateFrame() {
 }
 
 function explode(player) {
+   if (player.type_id == player.destroy_type_id) {
+       return;
+   }
    player.type_id = player.destroy_type_id;
    player.frame = 0;
    player.destroy = setInterval(function() {
@@ -574,6 +646,21 @@ function explode(player) {
             delete players[player.id];
        }
    }, 150);
+}
+
+function collide(player1, player2) {
+    if (player2.is_proj && !player1.is_proj) {
+        collide(player2, player1);
+        return;
+    }
+    if (!player1.is_proj) {
+        return;
+    }
+    delete players[player1.id];
+    if (player2.is_proj) {
+        player2.destroy_type_id = 'x';
+        explode(player2);
+    }
 }
 
 function refresh() {
@@ -622,9 +709,11 @@ function drawPlayers(under, proj) {
 }
 function drawPlayer(player) {
     var ptype = ptypes[player.type_id];
+    if (!ptype) return;
     var img = ptype.image;
-    if (player.theme_id && ptype.themes) {
-        img = ptype.themes[player.theme_id];
+    var theme_id = player.temp_theme_id || player.theme_id || (player.team_id && teams[player.team_id].theme_id);
+    if (ptype.themes && theme_id) {
+        img = ptype.themes[theme_id];
     }
     var tileOffset = _tileXY(player);
     context.drawImage(
@@ -715,9 +804,14 @@ function render() {
         });
     draw(pts.enter().append('tile'));
     pts.exit().remove();
-    d3.select('#jumps').text(jumps);
-//    d3.select('#score').text(score);
-//    d3.select('#loc').text(Math.round(o.x, 1) + ',' + Math.round(o.y, 1));
+}
+
+function updateScore() {
+    var player = players[playerId];
+    var team = teams[player.team_id];
+    d3.select('#score').text('● ' + team.score);
+    d3.select('#jumps').text('🚀 ' + player.lives);
+    d3.select('#loc').text('♥ ' + player.hp);
 }
 
 setInterval(_minimap, 1000);
@@ -1120,7 +1214,7 @@ function updateTeams() {
         .style('font-size', (renderSize * 0.8) + 'px')
         .style('margin-left', '1em');
     items.select('h3').text(function(d) {
-        return d.name.replace('_', ' ');
+        return d.name;
     });
     items.select('img').attr('src', function(d) {
         return themeImg('i', d.theme_id);
@@ -1161,7 +1255,7 @@ function updateShips() {
         var found = false;
         for (var pid in players) {
             var player = players[pid];
-            if (player.theme_id == panels.list.selected_team.theme_id
+            if (player.team_id == panels.list.selected_team.id
                 && player.type_id == type_id) {
                 found = true;
             }
@@ -1184,6 +1278,23 @@ function updateShips() {
         d3.select(this).style('border-color', 'white');
     });
     imgs.exit().remove();
+}
+
+var messageVisible = false;
+function showMessage(msg) {
+    if (messageVisible) {
+         setTimeout(function() {
+             showMessage(msg);
+         }, 5000);
+    }
+    messageVisible = true;
+    d3.select("#message")
+        .text(msg)
+        .style('display', 'block');
+    setTimeout(function() {
+        messageVisible = false;
+        d3.select('#message').style('display', 'none');
+    }, 5000)
 }
 
 };

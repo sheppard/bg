@@ -50,6 +50,12 @@
     overflow-y: auto;
     z-index: 1001;
 }
+.panel#message {
+    top: calc(100% - 5em);
+    padding: 1em;
+    bottom: auto;
+    text-align: center;
+}
 
 ul#teams {
     padding: 0px;
