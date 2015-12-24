@@ -78,14 +78,6 @@
               <input name="value" id="value" type="tel" value="{{value}}">
               <p class="error pointtype-value-errors"></p>
             </li>
-            {{^id}}
-            <li>
-              <label for="path">File</label>
-              <input name="path" id="path" type="file">
-              <p class="error pointtype-path-errors"></p>
-            </li>
-            {{/id}}
-            {{#id}}
             {{#layout}}
             {{#has_variants}}
             <li>
@@ -151,7 +143,6 @@
               <button type="button" id="mirror-ltr" data-icon="arrow-r" data-iconpos="notext" data-inline="true"></button>
               <button type="button" id="mirror-ttb" data-icon="arrow-d" data-iconpos="notext" data-inline="true"></button>
             <li>
-            {{/id}}
             <li>
               <div class="ui-grid-a">
                 <div class="ui-block-a">

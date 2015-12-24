@@ -67,40 +67,56 @@ if (mode == 'play') {
 
 var intervals = {};
 
-var ptypes;
+var ptypes = {};
 app.models.pointtype.prefetch().then(function(data) {
-    ptypes = {};
     data.list.forEach(function(ptype) {
-        ptype.image = new Image();
-        ptype.image.src = '/media/' + ptype.path;
         ptypes[ptype.id] = ptype;
+        ptype.themes = {};
         if (ptype.layout_id.match(/anim/)) {
             startAnim(ptype);
         }
-        if (ptype.theme_id) {
-            ptype.themes = {};
-            themes.forEach(function(theme) {
-                var timg = new Image();
-                ptype.themes[theme.id] = timg;
-                timg.onload = function() {
-                    if (panels.list.visible || panels.edit.visible) {
-                        updateTeams();
-                    }
-                    if (panels.ship.visible) {
-                        updateShips();
-                    }
-                }
-                timg.src = '/media/' + theme.id + '/' + ptype.path;
-            });
-        }
     });
+    refreshSprites();
 });
 
-var themes;
-var ptheme;
+function getSprite(type_id, theme_id) {
+    var ptype = ptypes[type_id], path;
+    if (!ptype) {
+         return null;
+    }
+    if (theme_id) {
+        path = theme_id + '/' + ptype.path;
+    } else {
+        theme_id = 'DEFAULT';
+        path = ptype.path;
+    }
+
+    if (ptype.themes[theme_id] && ptype.themes[theme_id].complete) {
+        return ptype.themes[theme_id];
+    }
+
+    if (!ptype.themes[theme_id]) {
+        var timg = ptype.themes[theme_id] = new Image();
+        timg.onload = refreshSprites;
+        timg.src = '/media/' + path;
+    }
+    return null;
+}
+
+function refreshSprites() {
+    if (panels.list.visible || panels.edit.visible) {
+        updateTeams();
+    }
+    if (panels.ship.visible) {
+        updateShips();
+    }
+}
+
+var themes = {};
 app.models.theme.load().then(function(data) {
-    themes = data.list;
-    ptheme = themes[Math.floor(Math.random()*themes.length)];
+    data.list.forEach(function(theme) {
+        themes[theme.id] = theme;
+    });
 });
 var unknown = {
     'layout_id': 'anim-4',
@@ -178,6 +194,7 @@ if (mode == 'edit') {
 }
 var grid = {};
 var teams = {};
+var starts = [];
 var teamThemes = [];
 var ships = [];
 var players = {};
@@ -253,12 +270,27 @@ context.mozImageSmoothingEnabled = false;
 context.imageSmoothingEnabled = false;
 var buffers = {};
 
-var mini = d3.select('#play').append('canvas')
-    .attr('width', count)
-    .attr('height', count)
-    .attr('style', 'position:fixed;right:0;bottom:0;background-color:#333');
-var minicontext = mini.node().getContext('2d');
-var minipixel = minicontext.createImageData(1, 1);
+var minicanvas = d3.select('#play')
+    .append('canvas')
+    .attr('style', 'position:fixed;right:5px;;bottom:5px;border: 2px solid #333;background-color:#111');
+var mini = {
+    'canvas': {
+        'all': document.createElement('canvas'),
+        'hist': document.createElement('canvas'),
+        'current': minicanvas.node()
+    },
+    'context': {}
+};
+minicanvas.on('click', function() {
+    var coords = d3.mouse(this);
+    nav({'x': coords[0], 'y': coords[1]}, true);
+});
+
+for (cname in mini.canvas) {
+    mini.canvas[cname].width = count;
+    mini.canvas[cname].height = count;
+    mini.context[cname] = mini.canvas[cname].getContext('2d');
+}
 
 var custom = d3.select(document.createElement('custom-elem'));
 var minielem = d3.select(document.createElement('custom-elem-mini'));
@@ -349,6 +381,7 @@ commands['GRID'] = function(level) {
             };
         });
     });
+    renderMap();
 }
 
 commands['POINT'] = function(x, y, type, theme, orientation) {
@@ -358,6 +391,12 @@ commands['POINT'] = function(x, y, type, theme, orientation) {
     pt.type_id = type;
     pt.theme_id = theme;
     pt.orientation = orientation;
+    if (ptypes[pt.type_id].layer == 'e') {
+        drawPixel(pt, mini.context.all);
+    }
+    if (pt.type_id == 'X' && pt.theme_id == teams[players[playerId].team_id].theme_id) {
+        starts.push(pt);
+    }
 }
 
 commands['PLAYER'] = function(pid, team, name, type, x, y, lives, hp, assign) {
@@ -444,6 +483,10 @@ commands['PROJECTILE'] = function(pid, type, x, y, direction, destroy) {
     proj.y = +y;
     proj.direction = direction;
     players[proj.player_id].orientation = direction;
+    players[proj.player_id].fired = direction;
+    setTimeout(function() {
+        players[proj.player_id].fired = false;
+    }, 200);
     proj.destroy_type_id = destroy;
     proj.is_proj = true;
     players[pid] = proj;
@@ -488,6 +531,19 @@ commands['PATH'] = function() {
     player.path = ppath;
     player.target = lastStep;
     players[pid] = player;
+    if (pid == playerId) {
+        var tid = pid + '-target-' + Math.floor(Math.random() * 1000);
+        players[tid] = {
+            'id': tid,
+            'x': lastStep.x,
+            'y': lastStep.y,
+            'type_id': null,
+            'is_target': true,
+            'destroy_type_id': 'T',
+            'theme_id': teams[player.team_id].theme_id
+        };
+        explode(players[tid], 30);
+    }
 }
 
 var ticker = null;
@@ -510,11 +566,11 @@ commands['TICK'] = function(f) {
         }
         interval = interval * (off / 100);
     }
-    if (interval < 50) {
-        interval = 50;
+    if (interval < 25) {
+        interval = 25;
     }
-    if (interval > 150) {
-        interval = 150;
+    if (interval > 125) {
+        interval = 125;
     }
 
     // d3.select('#score').text(Math.round(interval * 10000) / 10000);
@@ -633,9 +689,12 @@ function updateFrame() {
     }
 }
 
-function explode(player) {
+function explode(player, interval) {
    if (player.type_id == player.destroy_type_id) {
        return;
+   }
+   if (!interval) {
+       interval = 150;
    }
    player.type_id = player.destroy_type_id;
    player.frame = 0;
@@ -645,7 +704,7 @@ function explode(player) {
             clearInterval(player.destroy);
             delete players[player.id];
        }
-   }, 150);
+   }, interval);
 }
 
 function collide(player1, player2) {
@@ -692,6 +751,9 @@ function drawPlayers(under, proj) {
     var viewport = _getViewport();
     for (var pid in players) {
         var player = players[pid];
+        if (!player.x || !player.y) {
+            continue;
+        }
         if (!!player.under != !!under) {
             continue;
         }
@@ -704,16 +766,17 @@ function drawPlayers(under, proj) {
             && player.y > viewport.max.y + 1) {
             continue;
         }
+        if (!getTileActive(player.x, player.y)) {
+            continue;
+        }
         drawPlayer(player);
     }
 }
 function drawPlayer(player) {
-    var ptype = ptypes[player.type_id];
-    if (!ptype) return;
-    var img = ptype.image;
     var theme_id = player.temp_theme_id || player.theme_id || (player.team_id && teams[player.team_id].theme_id);
-    if (ptype.themes && theme_id) {
-        img = ptype.themes[theme_id];
+    var img = getSprite(player.type_id, theme_id);
+    if (!img) {
+        return;
     }
     var tileOffset = _tileXY(player);
     context.drawImage(
@@ -727,25 +790,55 @@ function drawPlayer(player) {
         renderSize,
         renderSize
     );
-    if (!player.moving || player.is_proj) {
+    if (player.is_proj) {
         return;
     }
+    if (player.moving) {
+        var fx = player.x, fy = player.y;
+        if (player.orientation == 'r') {
+            fx--;
+        } else if (player.orientation == 'l') {
+            fx++;
+        } else if (player.orientation == 'u') {
+            fy++;
+        } else if (player.orientation == 'd') {
+            fy--;
+        }
+        drawExtra(player, 'f', fx, fy);
+    } else if (player.id == playerId) {
+        var offsets = [
+            [0, -2], [-2, 0], [2, 0], [0, 2],
+            [0, -1], [-1, 0], [1, 0], [0, 1]
+        ];
+        offsets.forEach(function(offset) {
+            var fx = player.x + offset[0];
+            var fy = player.y + offset[1];
+            var dir = canFire(player,fx, fy);
+            var theme_id = null;
+            if (dir) {
+                if (player.fired == dir) {
+                    theme_id = teams[player.team_id].theme_id;
+                }
+                drawExtra(player, 'R', fx, fy, dir, theme_id);
+            }
+        });
+    }
+}
+
+function drawExtra(player, type_id, fx, fy, dir, theme_id) {
+    if (!dir) {
+        dir = player.orientation;
+    }
     tileOffset = _tileXY({
-        'type_id': 'f',
-        'orientation': player.orientation
+        'type_id': type_id,
+        'orientation': dir
     });
-    var fx = player.x, fy = player.y;
-    if (player.orientation == 'r') {
-        fx--;
-    } else if (player.orientation == 'l') {
-        fx++;
-    } else if (player.orientation == 'u') {
-        fy++;
-    } else if (player.orientation == 'd') {
-        fy--;
+    var img = getSprite(type_id, theme_id);
+    if (!img) {
+        return;
     }
     context.drawImage(
-        ptypes['f'].image,
+        img,
         tileOffset.x * tileSize,
         tileOffset.y * tileSize,
         tileSize,
@@ -784,22 +877,17 @@ function render() {
         current = _getTiles(minx, miny, maxx, maxy);
     current.forEach(function(d) {
         d.tileOffset = _tileXY(d);
-        var ptype = ptypes[d.type_id];
-        if (!ptype) {
-            return;
-        }
-        var img = ptype.image;
-        if (d.theme_id && ptype.themes) {
-            img = ptype.themes[d.theme_id];
-        }
-        d.tileLoaded = img.complete;
+        d.tileLoaded = !!getSprite(d.type_id, d.theme_id);
+        d.tileActive = getTileActive(d.x, d.y);
+        // d.tileSeen = talpha > 0;
     });
     var pts = custom.selectAll('tile')
         .data(current, function(d){
             return (
                 d.x + '/' + d.y + '/' +
                 d.type_id + '/' + d.theme_id + '/' + d.tileLoaded + '/' +
-                d.tileOffset.x + '/' + d.tileOffset.y
+                d.tileOffset.x + '/' + d.tileOffset.y + '/' +
+                d.tileActive
             );
         });
     draw(pts.enter().append('tile'));
@@ -814,63 +902,97 @@ function updateScore() {
     d3.select('#loc').text('♥ ' + player.hp);
 }
 
-setInterval(_minimap, 1000);
+setInterval(_minimap, 2000);
 function _minimap() {
-    return;
-    var pts = [];
-    for (var x in grid) {
-        for (var y in grid[x]) {
-            pts.push(grid[x][y]);
+    drawMap(mini.context.hist, mini.canvas.all);
+
+    var context = mini.context.current;
+    context.clearRect(0, 0, count, count);
+    context.save();
+    context.globalAlpha = 0.3;
+    context.drawImage(mini.canvas.hist, 0, 0);
+    context.restore();
+
+    drawMap(context, mini.canvas.all, true);
+    _tileActiveCache = {};
+}
+
+function drawMap(context, img, withPlayers) {
+    if (!players[playerId] || !players[playerId].team_id) {
+        context.drawImage(img, 0, 0);
+        return;
+    }
+    for (var pid in players) {
+        var player = players[pid];
+        if (player.team_id == players[playerId].team_id) {
+            drawClipped(context, img, player, withPlayers);
         }
     }
-    if (!pts.length) return;
-    var r = minielem.selectAll('tile').data(pts, function(d) {return d.x + ',' + d.y });
-    r.enter().append('tile')
-        .attr('x', function(d) { return d.x })
-        .attr('y', function(d) { return d.y });
-
-    r.attr('fill', function(d) {
-        if (d.theme_id) {
-            var tcolor;
-            themes.forEach(function(theme) {
-                if (d.theme_id == theme.id) {
-                    tcolor = theme.primary2;
-                }
-            });
-            return tcolor;
-        }
-        if (d.type_id == 'p')
-            return '#999';
-        return '#fff';
-    });
-    r.attr('opacity', function(d) {
-        if (d.x < scope.x - scope.w / 2 || d.x > scope.x + scope.w / 2 || d.y < scope.y - scope.h / 2 || d.y > scope.y + scope.h / 2)
-           return 0.33;
-        if (d.x < o.x - o.w / 2 || d.x > o.x + o.w / 2 || d.y < o.y - o.h / 2 || d.y > o.y + o.h / 2)
-           return 0.67;
-        return 1;
-    });
-    r.each(function(d) {
-        var node = d3.select(this);
-        var p = minipixel.data;
-        var fill = node.attr('fill');
-        if (fill.length == 7) {
-            fill = '#' + fill.charAt(1) + fill.charAt(3) + fill.charAt(5);
-        }
-        var opacity = node.attr('opacity');
-        var x = node.attr('x');
-        var y = node.attr('y');
-        var r = parseInt(fill.charAt(1), 16) * 0x11;
-        var g = parseInt(fill.charAt(2), 16) * 0x11;
-        var b = parseInt(fill.charAt(3), 16) * 0x11;
-        p[0] = r;
-        p[1] = g;
-        p[2] = b;
-        p[3] = Math.round(opacity * 255);
-        minicontext.putImageData(minipixel, x, y);
+    starts.forEach(function(start) {
+        drawClipped(context, img, start, withPlayers);
     });
 }
 
+function drawClipped(context, img, pt, withPlayers) {
+    context.save();
+    context.beginPath();
+    context.arc(pt.x, pt.y, 16, 0, 2 * Math.PI, false);
+    context.clip();
+    context.drawImage(img, 0, 0);
+    if (withPlayers) {
+        for (var pid in players) {
+            var p = players[pid];
+            if (!p.is_proj && !p.is_target) {
+                context.fillStyle = themes[teams[p.team_id].theme_id].primary2;
+                context.fillRect(p.x - 1, p.y - 1, 3, 3);
+            }
+        }
+    }
+    context.restore();
+}
+
+function renderMap() {
+    mini.context.all.fillStyle = '#333';
+    mini.context.all.fillRect(0, 0, count, count);
+    for (var x in grid) {
+        for (var y in grid[x]) {
+            if (ptypes[grid[x][y].type_id].layer == 'e') {
+                drawPixel(grid[x][y], mini.context.all);
+            }
+        }
+    }
+}
+
+function drawPixel(pt, context) {
+    var minipixel = context.createImageData(1, 1),
+        fill = '#999',
+        theme_id = pt.theme_id || ptypes[pt.type_id].theme_id;
+    if (theme_id && themes[theme_id]) {
+        fill = themes[theme_id].primary2;
+    }
+    var p = minipixel.data;
+    if (fill.length == 7) {
+        fill = '#' + fill.charAt(1) + fill.charAt(3) + fill.charAt(5);
+    }
+    var r = parseInt(fill.charAt(1), 16) * 0x11;
+    var g = parseInt(fill.charAt(2), 16) * 0x11;
+    var b = parseInt(fill.charAt(3), 16) * 0x11;
+    p[0] = r;
+    p[1] = g;
+    p[2] = b;
+    p[3] = 255;
+    context.putImageData(minipixel, pt.x, pt.y);
+}
+
+var _tileActiveCache = {};
+function getTileActive(x, y) {
+    var key = x + ',' + y;
+    if (!(key in _tileActiveCache)) {
+        var talpha = mini.context.current.getImageData(x, y, 1, 1).data[3];
+        _tileActiveCache[key] = talpha > 250; 
+    }
+    return _tileActiveCache[key];
+}
 
 function _getTile(x, y) {
     if (!grid[x] || !grid[x][y])
@@ -1007,18 +1129,20 @@ function draw(pts) {
    });
    pts.each(function(d) {
        var node = d3.select(this);
-       var ptype = ptypes[d.type_id] || unknown;
        var buffer = _getBuffer(d.x, d.y);
        var x = node.attr('x') - (buffer.x * tileSize * bufferScale);
        var y = node.attr('y') - (buffer.y * tileSize * bufferScale);
-       var img;
+       var img = getSprite(d.type_id, d.theme_id);
+       if (!d.tileActive) {
+           buffer.context.fillStyle = '#222';
+           buffer.context.fillRect(x, y, tileSize, tileSize);
+           return;
+       }
        buffer.context.clearRect(
            x, y, tileSize, tileSize
        );
-       if (d.theme_id && ptype.themes) {
-           img = ptype.themes[d.theme_id];
-       } else {
-           img = ptype.image;
+       if (!img) {
+           return;
        }
        buffer.context.drawImage(
            img,
@@ -1031,6 +1155,7 @@ function draw(pts) {
            tileSize,
            tileSize
        );
+       buffer.context.restore();
    });
 }
 
@@ -1113,47 +1238,7 @@ function click() {
 }
 
 function handleClick(x, y) {
-    var xi = players[playerId].x; 
-    var yi = players[playerId].y; 
-    var dx = x - xi;
-    var dy = y - yi;
-    var dir, xd = 0, yd = 0;
-    if (dx == 0 || dy == 0) {
-        if (Math.abs(dx) > Math.abs(dy)) {
-            if (dx > 0) {
-                dir = 'r';
-                xd = 1;
-            } else {
-                dir = 'l';
-                xd = -1;
-            }
-        } else {
-            if (dy > 0) {
-                dir = 'd';
-                yd = 1;
-            } else {
-                dir = 'u';
-                yd = -1;
-            }
-        }
-        var ptype = ptypes[grid[x][y].type_id];
-        if ((ptype.layer == 'd' || ptype.layer == 'e') ||
-            (Math.abs(dx) + Math.abs(dy) == 2 && (ptype.layer == 'a' || ptype.layer == 'b'))) {
-            while (xi != x - xd || yi != y - yd) {
-                xi += xd;
-                yi += yd;
-                ptype = ptypes[grid[xi][yi].type_id];
-                if (ptype.layer != 'a' && ptype.layer != 'b') {
-                    dir = false;
-                }
-            }
-            if (ptype.layer == 'e' && Math.abs(dx) + Math.abs(dy) == 1) {
-                dir = false;
-            }
-        } else {
-            dir = false; 
-        }
-    }
+    var dir = canFire(players[playerId], x, y, true);
     if (dir) {
         socket.send('FIRE ' + dir);
     } else {
@@ -1161,13 +1246,64 @@ function handleClick(x, y) {
     }
 }
 
+function canFire(player, x, y, distant) {
+    var xi = player.x; 
+    var yi = player.y; 
+    var dx = x - xi;
+    var dy = y - yi;
+    var dir, xd = 0, yd = 0;
+    if (dx != 0 && dy != 0) {
+         return false;
+    }
+    if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx > 0) {
+            dir = 'r';
+            xd = 1;
+        } else {
+            dir = 'l';
+            xd = -1;
+        }
+    } else {
+        if (dy > 0) {
+            dir = 'd';
+            yd = 1;
+        } else {
+            dir = 'u';
+            yd = -1;
+        }
+    }
+    var ptype = ptypes[grid[x][y].type_id];
+    if (ptype.layer == 'c') {
+        return false;
+    } else if (Math.abs(dx) + Math.abs(dy) != 2) {
+        if (!distant && Math.abs(dx) + Math.abs(dy) > 2) {
+            return false;
+        }
+        if (ptype.layer != 'd' && ptype.layer != 'e') {
+            return false;
+        }
+        if (ptype.layer == 'e' && Math.abs(dx) + Math.abs(dy) == 1) {
+            return false;
+        }
+    }
+    while (xi != x - xd || yi != y - yd) {
+        xi += xd;
+        yi += yd;
+        ptype = ptypes[grid[xi][yi].type_id];
+        if (ptype.layer != 'a' && ptype.layer != 'b') {
+            return false;
+        }
+    }
+    return dir;
+}
+
 var themeImgs = {};
 function themeImg(type_id, theme_id) {
     if (themeImgs[type_id + ':' + theme_id]) {
         return themeImgs[type_id + ':' + theme_id];
     }
-    var img = ptypes && ptypes[type_id] && ptypes[type_id].themes && ptypes[type_id].themes[theme_id];
-    if (!img || !img.complete) {
+    var img = getSprite(type_id, theme_id);
+    if (!img) {
         return '';
     }
     var tcanvas = document.createElement('canvas');

@@ -204,6 +204,8 @@ class Player(object):
                 yield from self.add_hp(-1)
 
     def set_target(self, frame, tx, ty):
+        if not self.active:
+            return False
         if self.target_x == tx and self.target_y == ty:
             return False
         lx, ly = self.x, self.y

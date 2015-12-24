@@ -71,6 +71,12 @@ function updateColor() {
 }
 
 app.models.pointtype.find(id).then(function(pointtype) {
+if (!pointtype) {
+    pointtype = {
+        'layout_id': 'tile-1',
+        'code': Math.floor(Math.random() * 1000)
+    };
+}
 app.models.layout.find(pointtype.layout_id).then(function(layout) {
 
 var lwidth = 1;
