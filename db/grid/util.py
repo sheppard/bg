@@ -49,9 +49,23 @@ def make_level():
     level = combine_layers(e_layers, p_layers).replace(' ', 'c')
     return level
 
-def make_layer(type_id, width, height, threshold=0.3, jitter=0.5, scale=16):
+def make_background(mult):
+    width = 128 + 32
+    height = 128 + 32
+    def sparse_maze(x, y):
+        return maze(x, y, lo=0.5)
+
+    return combine_layers(
+        make_layer('p', width, height, threshold=sparse_maze, jitter=0, scale=32, offset=1000 * mult),
+        make_layer('e', width, height, threshold=ground_threshold, jitter=0, offset=1000 * mult + 1000),
+    )
+
+def make_layer(type_id, width, height, threshold=0.3, jitter=0.5, scale=16, offset=None):
     layer = ''
-    offset = random.random() * random.randint(width, width * 100)
+    if offset is None:
+        offset = random.random() * random.randint(width, width * 100)
+    else:
+        random.seed(offset)
     for y in range(0, height):
         for x in range(0, width):
             weight1 = noise.snoise2(

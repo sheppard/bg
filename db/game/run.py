@@ -619,6 +619,10 @@ class Game(object):
             self.projectiles.remove(projectile)
 
     @asyncio.coroutine
+    def process_edit(self, player):
+        yield from player.send(self.to_str())
+
+    @asyncio.coroutine
     def send_initial(self, player):
         yield from player.send(self.to_str())
         yield from player.send(player.to_str(True))

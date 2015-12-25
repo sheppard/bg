@@ -104,6 +104,9 @@ function getSprite(type_id, theme_id) {
 }
 
 function refreshSprites() {
+    if (!panels.list) {
+        return;
+    }
     if (panels.list.visible || panels.edit.visible) {
         updateTeams();
     }
@@ -174,6 +177,40 @@ function addBackground() {
     }
 }
 
+var pbg = d3.select('#play').append('div')
+    .style('position', 'fixed')
+    .style('width', '100%')
+    .style('height', '100%')
+    .style('top', bgtop + 'px')
+function updateParallax() {
+    var w = bounds.w / renderSize / 8;
+    var h = bounds.h / renderSize / 8;
+    var cx = noffset.attr('x') / 24 + 3;
+    var cy = noffset.attr('y') / 24 + 3;
+    var pts = [];
+    for (var x = Math.floor(cx - w /2 ); x <= Math.ceil(cx + w / 2); x++) {
+        for (var y = Math.floor(cy - h /2 ); y <= Math.ceil(cy + h / 2); y++) {
+            pts.push({
+                'x': x,
+                'y': y,
+                'src': '/media/bg/5/' + scale + '/' + x + '/' + y + '.png',
+                'id': x + '-' + y
+            })
+        }
+    }
+    var imgs = pbg.selectAll('img').data(pts, function(d) { return d.id });
+    imgs.enter().append('img')
+        .attr('src', function(d) { return d.src})
+        .style('position', 'fixed');
+    imgs.style('left', function(d) {
+        return (d.x - cx) * renderSize * 8 + document.body.clientWidth / 2 + 'px';
+    });
+    imgs.style('top', function(d) {
+        return (d.y - cy) * renderSize * 8 + document.body.clientHeight / 2 + bgtop + 'px';
+    });
+    imgs.exit().remove();
+}
+
 var count = 128; // should load from server
 var o = {};
 o.x = Math.round(Math.random() * count / 2 + count / 4);
@@ -222,6 +259,7 @@ function nav(d, anim) {
                .attr('y', o.y)
                .each('end', function() {
                    o.b = 1;
+                   updateParallax();
                });
             last.x = o.x;
             last.y = o.y;
@@ -232,6 +270,7 @@ function nav(d, anim) {
         last.x = o.x;
         last.y = o.y;
     }
+    updateParallax();
 }
 
 var canvas = d3.select('#play').append('canvas')
@@ -332,10 +371,20 @@ socket.onmessage = function(msg) {
     var cmd = parts.shift();
     commands[cmd].apply(this, parts);
 }
+if (mode == 'edit') {
+    setTimeout(function() {
+        socket.send('EDIT');
+    }, 1000);
+    startAnim(unknown);
+    d3.timer(refresh);
+}
 
 var commands = {};
 commands['THEMES'] = function() {
     teamThemes = Array.prototype.slice.call(arguments);
+    if (!panels.list) {
+        return;
+    }
     if (panels.list.visible || panels.edit.visible) {
         updateTeams();
     }
@@ -354,7 +403,9 @@ commands['TEAM'] = function(id, name, theme_id, score) {
     team.theme_id = theme_id;
     team.score = score;
     teams[id] = team;
-    updateTeams();
+    if (panels.list) {
+        updateTeams();
+    }
 }
 commands['SCORE'] = function(id, score) {
     var team = teams[id] || {};
@@ -566,8 +617,8 @@ commands['TICK'] = function(f) {
         }
         interval = interval * (off / 100);
     }
-    if (interval < 25) {
-        interval = 25;
+    if (interval < 50) {
+        interval = 50;
     }
     if (interval > 125) {
         interval = 125;
@@ -902,7 +953,7 @@ function updateScore() {
     d3.select('#loc').text('♥ ' + player.hp);
 }
 
-setInterval(_minimap, 2000);
+setInterval(_minimap, 5000);
 function _minimap() {
     drawMap(mini.context.hist, mini.canvas.all);
 
@@ -918,7 +969,7 @@ function _minimap() {
 }
 
 function drawMap(context, img, withPlayers) {
-    if (!players[playerId] || !players[playerId].team_id) {
+    if (mode == 'edit' || !players[playerId] || !players[playerId].team_id) {
         context.drawImage(img, 0, 0);
         return;
     }
@@ -936,7 +987,7 @@ function drawMap(context, img, withPlayers) {
 function drawClipped(context, img, pt, withPlayers) {
     context.save();
     context.beginPath();
-    context.arc(pt.x, pt.y, 16, 0, 2 * Math.PI, false);
+    context.arc(pt.x, pt.y, 24, 0, 2 * Math.PI, false);
     context.clip();
     context.drawImage(img, 0, 0);
     if (withPlayers) {
@@ -1202,9 +1253,6 @@ function click() {
         }
     }
     d.pending = true;
-    if (d.type_id == 'j')
-        jumps++;
-    score += ptypes[d.type_id].value || 0;
     if (mode == 'edit') {
         var orient = d.orientation || 'u', newOrient;
         if (d.type_id == $('#pointtype').val()) {
@@ -1221,6 +1269,9 @@ function click() {
         d.theme_id = $('#theme').val();
         d.orientation = newOrient;
     } else {
+        if (d.type_id == 'j')
+            jumps++;
+        score += ptypes[d.type_id].value || 0;
         d.type_id = 'i';
         d.theme_id = ptheme.id;
     }
